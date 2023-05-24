@@ -21,14 +21,14 @@ def distance2_to_centroids(h, y_true, epsilon=1e-12):
     
 @torch.no_grad()
 def predict(model, x, y_true):
-    """Predict the class with closest centroid to each example."""
+    """Predict by finding the class with closest centroid to each example."""
     d = sum(distance2_to_centroids(h, y_true) for h in LayerOutputs(model, x))
     return d.argmin(1) # type: ignore
 
 # %%
 def centroid_loss(h, y_true, alpha=10, epsilon=1e-12):
     """
-    Loss function based on distance from true centroid vs a nearby centroid.
+    Loss function based on distance^2 to the true centroid vs a nearby centroid.
     
     Achieves an error rate of ~2.0%.
     """

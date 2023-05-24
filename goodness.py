@@ -6,7 +6,7 @@ from torch import split
 from torch.optim import Adam
 from utils import LayerOutputs, UnitLength
 
-def overlay_target(x, y):
+def superimpose_label(x, y):
     x = x.clone()
     x[:, :10] = 0
     x[range(x.shape[0]), y] = x.max()
@@ -28,7 +28,7 @@ def goodness_per_class(model, x):
     """
     g_per_label = []
     for label in range(10):
-        x_candidate = overlay_target(x, label)
+        x_candidate = superimpose_label(x, label)
         g_candidate = sum(goodness(h) for h in LayerOutputs(model, x_candidate))
         g_per_label.append(g_candidate.unsqueeze(1)) # type: ignore
     return torch.cat(g_per_label, 1)
@@ -43,7 +43,7 @@ def make_examples(model, x, y_true, epsilon=1e-12):
     """
     Make some positive and negative examples.
     
-    The positive examples are simply overlayed with the true label. The negative
+    The positive examples are superimposed with their true label. The negative
     examples have a "hard" label with high goodness, excluding the true label.
     """
 
@@ -56,8 +56,8 @@ def make_examples(model, x, y_true, epsilon=1e-12):
     g[range(x.shape[0]), y_true] = 0
     y_hard = torch.multinomial(torch.sqrt(g) + epsilon, 1).squeeze(1)
 
-    x_pos = overlay_target(x, y_true)
-    x_neg = overlay_target(x, y_hard)
+    x_pos = superimpose_label(x, y_true)
+    x_neg = superimpose_label(x, y_hard)
     return x_pos, x_neg
 
 # %%
@@ -85,13 +85,18 @@ def triplet_loss(h_pos, h_neg, margin=0.5):
     Adapted from the standard loss for Siamese Networks:
     https://en.wikipedia.org/wiki/Triplet_loss
 
-    >>> Loss_i = max(||neg - anchor||^2 - ||pos - anchor||^2 + margin, 0)
+    >>> Loss_i = max(||neg - anchor|| - ||pos - anchor|| + margin, 0)
 
-    We treat goodness as a distance, and the "anchor point" as the origin, i.e.
-    zero goodness. We therefore want negative inputs to be near the anchor, and
-    positive inputs to be far from the anchor. Note, the anchor in the standard
-    formulation is for the positive input, but we use the anchor for the
-    negative input here, so the roles of negative and positive are reversed.
+    We use goodness as the distance measure, where the "anchor point" is the
+    origin, i.e. zero goodness. We therefore want negative inputs to be near the
+    anchor, and positive inputs to be far from the anchor. Note, the anchor in
+    the standard formulation is for the positive input, but we use the anchor
+    for the negative input here, so the roles of negative and positive are
+    reversed. 
+
+    Note, goodness is the sum of squared activations, so is the squared
+    Euclidean distance. The standard Euclidean distance works as well, but
+    converges somewhat slower.
 
     Achieves an error rate of ~2.1%.
     """
@@ -167,6 +172,7 @@ for epoch in range(num_epochs):
 
         # Positive examples: the true label
         # Negative examples: a "hard" label that is not the true label
+        # TODO: we could move the negative example generation inside the layer loop
         x_pos, x_neg = make_examples(model, x, y)
 
         # Train layers in turn, using backprop locally only
