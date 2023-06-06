@@ -134,7 +134,7 @@ def smoothed_triplet_loss(h_pos, h_neg, beta=5.0):
     """
 
     g_pos, g_neg = goodness(h_pos), goodness(h_neg)
-    return F.softplus(beta * (g_neg - g_pos)).mean() #F.silu(beta * (g_neg - g_pos)).mean()
+    return F.silu(beta * (g_neg - g_pos)).mean()
 
 # %%
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
