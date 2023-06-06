@@ -65,17 +65,33 @@ def hinton_loss(h_pos, h_neg, theta=2.0):
     """
     Calculate Hinton's Loss as per: https://arxiv.org/pdf/2212.13345.pdf
 
-    Converges very slowly. See SymBa paper for why:
+    Converges very slowly. See SymBa paper for explanation:
     https://arxiv.org/pdf/2303.08418.pdf
 
-    Achieves an error rate of ~2.7% after 600 epochs, with a learning rate of
-    0.1.
+    Achieves an error rate on MNIST of ~2.7% for a network with two hidden
+    layers of 500 units, after 600 epochs.
 
     Paramaters:
-        theta (float): A margin used for both positive and negative examples.
+        theta (float): A threshold used for both positive and negative examples.
     """
     g_pos, g_neg = goodness(h_pos), goodness(h_neg)
     return F.softplus(theta - g_pos).mean() + F.softplus(g_neg - theta).mean()
+
+# %%
+def symba_loss(h_pos, h_neg, alpha=4.0):
+    """
+    Calculate SymBa Loss as per: https://arxiv.org/pdf/2303.08418.pdf
+
+    Achieves an error rate on MNIST of ~2.2% for a network with two hidden
+    layers of 500 units, after 60 epochs.
+
+    Paramaters:
+        alpha (float): A scaling factor used for both positive and negative
+        examples.
+    """
+    g_pos, g_neg = goodness(h_pos), goodness(h_neg)
+    Delta = g_pos - g_neg
+    return F.softplus(-alpha*Delta).mean()
 
 # %%
 def triplet_loss(h_pos, h_neg, margin=0.5):
@@ -87,40 +103,38 @@ def triplet_loss(h_pos, h_neg, margin=0.5):
 
     >>> Loss_i = max(||neg - anchor|| - ||pos - anchor|| + margin, 0)
 
-    We use goodness as the distance measure, where the "anchor point" is the
-    origin, i.e. zero goodness. We therefore want negative inputs to be near the
-    anchor, and positive inputs to be far from the anchor. Note, the anchor in
-    the standard formulation is for the positive input, but we use the anchor
-    for the negative input here, so the roles of negative and positive are
-    reversed. 
+    We use goodness as the distance measure (the squared Euclidean distance),
+    where the "anchor point" is the origin (i.e. zero goodness). We therefore
+    want negative inputs to be near the anchor, and positive inputs to be far
+    from the anchor. Note, the anchor in the standard formulation is for the
+    positive input, but we use the anchor for the negative input here, so the
+    roles of negative and positive are reversed. 
 
-    Note, goodness is the sum of squared activations, so is the squared
-    Euclidean distance. The standard Euclidean distance works as well, but
-    converges somewhat slower.
-
-    Achieves an error rate of ~2.1%.
+    Achieves an error rate of ~2.1% for a network with two hidden layers of 500
+    units, after 60 epochs.
     """
     g_pos, g_neg = goodness(h_pos), goodness(h_neg)
     return F.relu(g_neg - g_pos + margin).mean()
 
 # %%
-def smoothed_triplet_loss(h_pos, h_neg, alpha=5.0):
+def smoothed_triplet_loss(h_pos, h_neg, beta=5.0):
     """       
     Calculate the Smoothed Triplet Loss.
     
     The Swish activation function (aka SiLU) acts like a smoothed ReLU. It bakes
-    in a margin of approx 2.6/alpha, and includes a smooth valley around the
+    in a margin of approx 2.6/beta, and includes a smooth valley around the
     margin point, which helps with convergence, and allows us to increase the
     learning rate. 
     
-    The value of alpha determines the margin point. It also affects the
-    sharpness of the curvature around the margin, so an offset may be required
-    for more complex problems.
+    Achieves an error rate of ~1.65%, after 60 epochs.
 
-    Achieves an error rate of ~1.7%.
+    The value of beta determines the margin point. It also affects the
+    sharpness of the curvature around the margin, so an additional offset
+    parameter may be required for more complex problems.
     """
+
     g_pos, g_neg = goodness(h_pos), goodness(h_neg)
-    return F.silu(alpha * (g_neg - g_pos)).mean()
+    return F.softplus(beta * (g_neg - g_pos)).mean() #F.silu(beta * (g_neg - g_pos)).mean()
 
 # %%
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -132,14 +146,14 @@ y_tr = torch.load('./data/MNIST/baked/train_y.pt', device)
 x_te = torch.load('./data/MNIST/baked/test_x.pt', device)
 y_te = torch.load('./data/MNIST/baked/test_y.pt', device)
 
-# %%
-# Define the model
+# %% Define the model
 # ----------------
-# Must be an iterable of layers, each of which start with a
-# UnitLength() sub-layer, to "conceal" goodness.
+# Must be an iterable of layers, each of which start with a UnitLength()
+# sub-layer, to "conceal" goodness from the next layer.
+n_units = 500 # 2000 improves error rate
 model = nn.Sequential(
-    nn.Sequential(UnitLength(), nn.Linear(784, 500), nn.ReLU()),
-    nn.Sequential(UnitLength(), nn.Linear(500, 500), nn.ReLU()),
+    nn.Sequential(UnitLength(), nn.Linear(784, n_units), nn.ReLU()),
+    nn.Sequential(UnitLength(), nn.Linear(n_units, n_units), nn.ReLU()),
 ).to(device)
 
 # %%
@@ -157,9 +171,9 @@ def print_evaluation(epoch=None):
 # Training parameters
 torch.manual_seed(42)
 loss_fn = smoothed_triplet_loss
-learning_rate = 0.35 if loss_fn is not hinton_loss else 0.1
+learning_rate = 0.1 if loss_fn is hinton_loss else 0.35
 optimiser = Adam(model.parameters(), lr=learning_rate)
-num_epochs = 1 + (60 if loss_fn is not hinton_loss else 600)
+num_epochs = 1 + (600 if loss_fn is hinton_loss else 60)
 batch_size = 4096
 
 # %%
