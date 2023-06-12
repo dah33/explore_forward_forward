@@ -60,26 +60,6 @@ I show that this formulation improves on the SymBa loss, reducing the error rate
 
 Increasing the number of units in both hidden layers to 2,000, as per Hinton's paper, reduces the error rate to ~1.35% using the Swish Variant.
 
-
-* $\mathcal{A}$ is the *anchor* input
-* $\mathcal{P}$ is a *positive* input from the same class as the anchor
-* $\mathcal{N}$ is a *negative* input from a different class to the anchor
-* $\alpha$ is the margin, a hyperparameter, the same for all layers.
-
-I define two classes, "correct" and "incorrect", so that $\mathcal{P}$ is an input with the correct label superimposed, and $\mathcal{N}$ is the same input, but with an incorrect label superimposed. The anchor input $\mathcal{A}$ is the origin (i.e. zero goodness) with a class of "correct". I thus want the negative input to be near the anchor, and the positive input to be far from the anchor, where the distance measure is goodness, the squared Euclidean distance. This reverses the roles of positive and negative in the above formulation. This leads to the loss function:
-
-$$
-\begin{align}
-\mathcal{L}^{(k)}(\mathcal{P},\mathcal{N}) &= 
-    \text{max}\big(G_\mathcal{N} - G_\mathcal{P} + \alpha, 0\big) \\
-    &\approx \text{SiLU}(-\beta\Delta)
-\end{align}
-$$
-
-where $\beta \approx {2.6}/{\alpha}$, and $\text{SiLU}(x) = x\sigma(x)$ is the [Sigmoid Linear Unit](https://en.wikipedia.org/wiki/Activation_function#Table_of_activation_functions) activation function.
-
-I show that this formulation improves on the SymBa loss, reducing the MNIST error rate to ~1.65%. After just one epoch, the error rate is ~12%. Increasing the number of units in both hidden layers to 2000, reduces the error rate to ~1.35%.
-
 # Centroid Algorithm
 
 In `centroid.py` propose a new algorithm that sets $\mathcal{N}$ and $\mathcal{P}$ to be the "centroids" of each class. 
