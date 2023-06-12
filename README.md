@@ -39,10 +39,10 @@ Hinton leaves open the question of the best source of negative examples. I mine 
 This [paper](https://arxiv.org/pdf/2303.08418.pdf) proposes a loss function that works with *pairs* of positive and negative inputs:
 
 $$
-\mathcal{L}(\mathcal{P},\mathcal{N}) = \log(1+ e^{-\alpha\Delta})
+\mathcal{L}(\mathcal{P},\mathcal{N}) = \log(1+ e^{-\alpha(G_\mathcal{P} - G_\mathcal{N})})
 $$
 
-where $\Delta = G_\mathcal{P} - G_\mathcal{N}$ is the difference in goodness for the layer for the positive and negative inputs, $\mathcal{P}$ and $\mathcal{N}$, and $\alpha$ is a scaling factor, a hyperparameter, the same for all layers.
+where $G_\mathcal{P} - G_\mathcal{N}$ is the difference in goodness for the layer for the positive and negative inputs, $\mathcal{P}$ and $\mathcal{N}$, and $\alpha$ is a scaling factor, a hyperparameter, the same for all layers.
 
 The paper explains why training using this loss function converges more quickly than Hinton's proposed loss function.
 
@@ -53,7 +53,7 @@ I show that training the same network as before, but using the SymBa loss functi
 The SymBa loss uses $log(1 + e^x)$ which is a soft approximation to $\text{max}(0, x)$. Another soft approximation is the [Swish](https://en.wikipedia.org/wiki/Swish_functions) function $x\sigma(x)$. It is non-monotonic below zero, which likely has a regularising effect. The SymBa loss becomes:
 
 $$
-\mathcal{L}^{(k)}(\mathcal{P},\mathcal{N}) = \frac{-\alpha\Delta}{1 + e^{\alpha\Delta}}
+\mathcal{L}(\mathcal{P},\mathcal{N}) = \frac{-\alpha(G_\mathcal{P} - G_\mathcal{N})}{1 + e^{\alpha(G_\mathcal{P} - G_\mathcal{N})}}
 $$
 
 I show that this formulation improves on the SymBa loss, reducing the error rate to ~1.65%. After just one epoch, the error rate is ~12%. 
