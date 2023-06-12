@@ -8,23 +8,23 @@ I present a reference implementation of Hinton's algorithm, and two alternative 
 
 In [hinton_goodness.py](.\hinton_goodness.py) I implement Hinton's algorithm using Pytorch on the MNIST dataset using a simple MLP with two hidden layers of 500 rectified linear units, as presented in his paper. 
 
-Hinton's proposed loss function for the output of layer $k$ is:
+Hinton's proposed loss function (see equations (1) and (3) in the paper) for the output of layer $k$:
 
 $$
-\mathcal{L}^{(k)}(x) = \log(1+ e^{y(G - \theta)})
+\mathcal{L}(x) = \log(1+ e^{y(G - \theta)})
 $$
 
 where: 
 
-* $G = ||f(x)||^2$ is the *goodness* measure, where $f(x)$ is the output of layer $k$, parameterised by $x$, the input to *first* layer.
+* $G = ||f(x)||^2$ is the *goodness* measure, where $f(x)$ is the output of layer $k$, parameterised by $x$, the *input* to the network. In other words, it's an embedding of $x$.
 * $y$ is the class of the input: 
-  - $+1$ for *positive* inputs, with the correct label superimposted;
+  - $+1$ for *positive* inputs, with the correct label superimposed;
   - $-1$ for *negative* inputs, with an incorrect label superimposed.
 * $\theta$ is some threshold, a hyperparameter, the same for all layers.
 
 The loss for the first layer is summed over all positive and negative inputs, then minimised, before the output of the now trained layer is passed to the next layer, and so on.
 
-The network makes a prediction by trying all possible labels with an input, and choosing the one with the highest goodness.
+The network makes a prediction by superimposing all possible labels onto the input, and choosing the variant with the highest total goodness across the layers. I choose to average the goodness per neuron in each the layer, then sum across all layers. This ensures the $\theta$ are comparable, and all layers are weighted equally, regardless of their size. Hinton chooses to discard the goodness of the first layer for deeper networks.
 
 Like Hinton, I test this algorithm on the MNIST dataset. I show that training a simple model with two hidden layers of 500 units converges slowly to an error rate of ~2.7%, after 600 epochs. 
 
@@ -39,31 +39,27 @@ Hinton leaves open the question of the best source of negative examples. I mine 
 This [paper](https://arxiv.org/pdf/2303.08418.pdf) proposes a loss function that works with *pairs* of positive and negative inputs:
 
 $$
-\begin{align}
-\mathcal{L}^{(k)}(\mathcal{P},\mathcal{N}) &= \log(1+ e^{-\alpha\Delta}) \\
-    &= \text{softplus}(-\alpha\Delta)
-\end{align}
+\mathcal{L}(\mathcal{P},\mathcal{N}) = \log(1+ e^{-\alpha\Delta})
 $$
 
-where:
+where $\Delta = G_\mathcal{P} - G_\mathcal{N}$ is the difference in goodness for the layer for the positive and negative inputs, $\mathcal{P}$ and $\mathcal{N}$, and $\alpha$ is a scaling factor, a hyperparameter, the same for all layers.
 
-* $\Delta = G_\mathcal{P} - G_\mathcal{N}$ is the difference in goodness for the layer of the positive and negative inputs, $\mathcal{P}$ and $\mathcal{N}$.
-* $\alpha$ is a scaling factor, a hyperparameter, the same for all layers.
+The paper explains why training using this loss function converges more quickly than Hinton's proposed loss function.
 
-The paper also demonstrates why training using this loss function converges more quickly than Hinton's proposed loss function.
+I show that training the same network as before, but using the SymBa loss function, converges more quickly to an error rate of ~2.2%, after 60 epochs. 
 
-I show that training the same network as before, but using the SymBa loss function, converges more quickly to MNIST error rate of ~2.2%, after 60 epochs. 
+### Swish Variant
 
-### Triplet Loss
-
-I reformulate the SymBa loss, by drawing a parallel to the [Triplet Loss](https://en.wikipedia.org/wiki/Triplet_loss) function used in Siamese Networks:
+The SymBa loss uses $log(1 + e^x)$ which is a soft approximation to $\text{max}(0, x)$. Another soft approximation is the [Swish](https://en.wikipedia.org/wiki/Swish_functions) function $x\sigma(x)$. It is non-monotonic below zero, which likely has a regularising effect. The SymBa loss becomes:
 
 $$
-\mathcal{L}^{(k)}(\mathcal{A},\mathcal{P},\mathcal{N}) = 
-    \text{max}(||f(\mathcal{A}) - f(\mathcal{P})||^2 - ||f(\mathcal{A}) - f(\mathcal{N})||^2 + \alpha, 0)
+\mathcal{L}^{(k)}(\mathcal{P},\mathcal{N}) = \frac{-\alpha\Delta}{1 + e^{\alpha\Delta}}
 $$
 
-where: 
+I show that this formulation improves on the SymBa loss, reducing the error rate to ~1.65%. After just one epoch, the error rate is ~12%. 
+
+Increasing the number of units in both hidden layers to 2,000, as per Hinton's paper, reduces the error rate to ~1.35% using the Swish Variant.
+
 
 * $\mathcal{A}$ is the *anchor* input
 * $\mathcal{P}$ is a *positive* input from the same class as the anchor

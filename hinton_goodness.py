@@ -61,7 +61,7 @@ def make_examples(model, x, y_true, epsilon=1e-12):
     return x_pos, x_neg
 
 # %%
-def hinton_loss(h_pos, h_neg, theta=2.0):
+def hinton_loss(h_pos, h_neg, theta=2.0, alpha=1.0):
     """
     Calculate Hinton's Loss as per: https://arxiv.org/pdf/2212.13345.pdf
 
@@ -71,11 +71,20 @@ def hinton_loss(h_pos, h_neg, theta=2.0):
     Achieves an error rate on MNIST of ~2.7% for a network with two hidden
     layers of 500 units, after 600 epochs.
 
-    Paramaters:
+    The paper is actually somewhat ambiguous about the loss function, however it
+    appears to be log(sigmoid(-x)) where x is (g_pos - theta) or (theta -
+    g_neg), based on equations (1) and (3). This is equivalent to the softplus
+    function, log(1 + exp(x)).
+
+    Parameters:
         theta (float): A threshold used for both positive and negative examples.
+        alpha (float): A scaling factor, also used for both. Hinton sets to 1.
     """
     g_pos, g_neg = goodness(h_pos), goodness(h_neg)
-    return F.softplus(theta - g_pos).mean() + F.softplus(g_neg - theta).mean()
+    # Mean of all examples, so not a pairwise comparison:
+    loss_pos = F.softplus(theta - g_pos, alpha).mean()
+    loss_neg = F.softplus(g_neg - theta, alpha).mean()
+    return loss_pos + loss_neg 
 
 # %%
 def symba_loss(h_pos, h_neg, alpha=4.0):
@@ -85,56 +94,29 @@ def symba_loss(h_pos, h_neg, alpha=4.0):
     Achieves an error rate on MNIST of ~2.2% for a network with two hidden
     layers of 500 units, after 60 epochs.
 
-    Paramaters:
+    Parameters:
         alpha (float): A scaling factor used for both positive and negative
         examples.
     """
     g_pos, g_neg = goodness(h_pos), goodness(h_neg)
     Delta = g_pos - g_neg
-    return F.softplus(-alpha*Delta).mean()
+    return F.softplus(-alpha * Delta).mean()
 
 # %%
-def triplet_loss(h_pos, h_neg, margin=0.5):
+def swish_loss(h_pos, h_neg, alpha=6.0):
     """
-    Calculates the Triplet Loss.
+    Calculate the Swish variant of SymBa Loss, see README.md for details.
     
-    Adapted from the standard loss for Siamese Networks:
-    https://en.wikipedia.org/wiki/Triplet_loss
-
-    >>> Loss_i = max(||neg - anchor|| - ||pos - anchor|| + margin, 0)
-
-    We use goodness as the distance measure (the squared Euclidean distance),
-    where the "anchor point" is the origin (i.e. zero goodness). We therefore
-    want negative inputs to be near the anchor, and positive inputs to be far
-    from the anchor. Note, the anchor in the standard formulation is for the
-    positive input, but we use the anchor for the negative input here, so the
-    roles of negative and positive are reversed. 
-
-    Achieves an error rate of ~2.1% for a network with two hidden layers of 500
-    units, after 60 epochs.
+    Achieves an error rate on MNIST of ~1.7% for a network with two hidden
+    layers of 500 units, after 60 epochs.
+    
+    Parameters:
+        alpha (float): A scaling factor used for both positive and negative
+        examples.
     """
     g_pos, g_neg = goodness(h_pos), goodness(h_neg)
-    return F.relu(g_neg - g_pos + margin).mean()
-
-# %%
-def smoothed_triplet_loss(h_pos, h_neg, beta=5.0):
-    """       
-    Calculate the Smoothed Triplet Loss.
-    
-    The Swish activation function (aka SiLU) acts like a smoothed ReLU. It bakes
-    in a margin of approx 2.6/beta, and includes a smooth valley around the
-    margin point, which helps with convergence, and allows us to increase the
-    learning rate. 
-    
-    Achieves an error rate of ~1.65%, after 60 epochs.
-
-    The value of beta determines the margin point. It also affects the
-    sharpness of the curvature around the margin, so an additional offset
-    parameter may be required for more complex problems.
-    """
-
-    g_pos, g_neg = goodness(h_pos), goodness(h_neg)
-    return F.silu(beta * (g_neg - g_pos)).mean()
+    Delta = g_pos - g_neg
+    return F.silu(-alpha * Delta).mean()
 
 # %%
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -170,7 +152,7 @@ def print_evaluation(epoch=None):
 # %%
 # Training parameters
 torch.manual_seed(42)
-loss_fn = smoothed_triplet_loss
+loss_fn = swish_loss #hinton_loss
 learning_rate = 0.1 if loss_fn is hinton_loss else 0.35
 optimiser = Adam(model.parameters(), lr=learning_rate)
 num_epochs = 1 + (600 if loss_fn is hinton_loss else 60)
@@ -189,7 +171,7 @@ for epoch in range(num_epochs):
         # TODO: we could move the negative example generation inside the layer loop
         x_pos, x_neg = make_examples(model, x, y)
 
-        # Train layers in turn, using backprop locally only
+        # Train layers in turn, using backpropagation locally only
         for layer in model:
             h_pos, h_neg = layer(x_pos), layer(x_neg)
             loss = loss_fn(h_pos, h_neg)
