@@ -178,7 +178,8 @@ for epoch in range(num_epochs):
             optimiser.zero_grad()
             loss.backward()
             optimiser.step()
-            x_pos, x_neg = h_pos.detach(), h_neg.detach()
+            with torch.no_grad():
+                x_pos, x_neg = layer(x_pos), layer(x_neg)
 
     # Evaluate the model on the training and test set
     if (epoch + 1) % 5 == 1:

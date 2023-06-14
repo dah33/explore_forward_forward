@@ -1,5 +1,4 @@
 # %%
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -94,14 +93,15 @@ for epoch in range(num_epochs):
     # Mini-batch training
     for x, y in zip(split(x_tr, batch_size), split(y_tr, batch_size)):
 
-        # Train layers in turn, using backprop locally only
+        # Train layers in turn, using backpropagation locally only
         for layer in model:
             h = layer(x)
             loss = centroid_loss(h, y)
             optimiser.zero_grad()
             loss.backward()
             optimiser.step()
-            x = h.detach() # no need to forward propagate x again, as direction doesn't change
+            with torch.no_grad():
+                x = layer(x)
 
     # Evaluate the model on the training and test set
     if (epoch + 1) % 5 == 1:
