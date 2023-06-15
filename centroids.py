@@ -28,7 +28,7 @@ def predict(model, x, y_true, skip_layers=1):
     return d.argmin(1) # type: ignore
 
 # %%
-def centroid_loss(h, y_true, alpha=10, epsilon=1e-12):
+def centroid_loss(h, y_true, alpha=4.0, epsilon=1e-12):
     """
     Loss function based on distance^2 to the true centroid vs a nearby centroid.
     
