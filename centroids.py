@@ -22,9 +22,9 @@ def distance2_to_centroids(h, y_true, epsilon=1e-12):
     return x_to_centroids.pow(2).mean(1) # [n_examples, 10]
     
 @torch.no_grad()
-def predict(model, x, y_true):
+def predict(model, x, y_true, skip_layers=1):
     """Predict by finding the class with closest centroid to each example."""
-    d = sum(distance2_to_centroids(h, y_true) for h in LayerOutputs(model, x))
+    d = sum([distance2_to_centroids(h, y_true) for h in LayerOutputs(model, x)][skip_layers:])
     return d.argmin(1) # type: ignore
 
 # %%
