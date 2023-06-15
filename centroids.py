@@ -14,7 +14,9 @@ def distance2_to_centroids(h, y_true, epsilon=1e-12):
     Returns a tensor of shape [n_examples, 10].
     """
     safe_mean = lambda x, dim: x.sum(dim) / (x.shape[dim] + epsilon)
-    # TODO: what if class is missing? determine centroids only for classes that are present, and return torch.unique(y_true)
+    # TODO: what if class is missing? 
+    # * determine centroids only for classes that are present, and return torch.unique(y_true)
+    # * or treat centroids as trainable parameters, so they slowly update
     class_centroids = torch.stack([safe_mean(h[y_true == i],0) for i in range(10)], dim=1) # [n_in, 10]
     x_to_centroids = h.unsqueeze(2) - class_centroids # [n_examples, n_in, 10]
     return x_to_centroids.pow(2).mean(1) # [n_examples, 10]
@@ -60,9 +62,10 @@ y_te = torch.load('./data/MNIST/baked/test_y.pt', device)
 # ----------------
 # Must be an iterable of layers. I find it works best if each layer starts with
 # a UnitLength() sub-layer.
+n_units = 500 # 2000 improves error rate
 model = nn.Sequential(
-    nn.Sequential(UnitLength(), nn.Linear(784, 500), nn.ReLU()),
-    nn.Sequential(UnitLength(), nn.Linear(500, 500), nn.ReLU()),
+    nn.Sequential(UnitLength(), nn.Linear(784, n_units), nn.ReLU()),
+    nn.Sequential(UnitLength(), nn.Linear(n_units, n_units), nn.ReLU()),
 ).to(device)
 
 # %%
