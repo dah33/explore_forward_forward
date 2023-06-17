@@ -28,11 +28,11 @@ def predict(model, x, y_true, skip_layers=1):
     return d.argmin(1) # type: ignore
 
 # %%
-def centroid_loss(h, y_true, alpha=4.0, epsilon=1e-12):
+def centroid_loss(h, y_true, alpha=4.0, epsilon=1e-12, temperature=1.0):
     """
     Loss function based on distance^2 to the true centroid vs a nearby centroid.
     
-    Achieves an error rate of ~2.0%.
+    Achieves an error rate of ~1.8%.
     """
 
     # Distance from h to centroids of each class
@@ -40,7 +40,7 @@ def centroid_loss(h, y_true, alpha=4.0, epsilon=1e-12):
 
     # Choose a nearby class, at random, using the inverse distance as a
     # probability distribution
-    y_near = torch.multinomial((1 / (d2 + epsilon)), 1).squeeze(1)
+    y_near = torch.multinomial((d2 + epsilon).pow(-temperature), 1).squeeze(1)
 
     # Smoothed version of triplet loss: max(0, d2_same - d2_near + margin)
     d2_true = d2[range(d2.shape[0]), y_true] # ||anchor - positive||^2
@@ -82,7 +82,6 @@ def print_evaluation(epoch=None):
 # %%
 # Training parameters
 torch.manual_seed(42)
-loss_fn = centroid_loss
 learning_rate = 0.05
 optimiser = Adam(model.parameters(), lr=learning_rate)
 num_epochs = 120+1
@@ -99,7 +98,8 @@ for epoch in range(num_epochs):
         # Train layers in turn, using backpropagation locally only
         for layer in model:
             h = layer(x)
-            loss = centroid_loss(h, y)
+            temperature = 4
+            loss = centroid_loss(h, y, temperature=temperature)
             optimiser.zero_grad()
             loss.backward()
             optimiser.step()
