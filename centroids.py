@@ -39,8 +39,11 @@ def centroid_loss(h, y_true, alpha=4.0, epsilon=1e-12, temperature=1.0):
     d2 = distance2_to_centroids(h, y_true)
 
     # Choose a nearby class, at random, using the inverse distance as a
-    # probability distribution
-    y_near = torch.multinomial((d2 + epsilon).pow(-temperature), 1).squeeze(1)
+    # probability distribution, normalised by the minimum distance to avoid
+    # out-of-range values.
+    min_d2 = torch.min(d2, 1, keepdim=True)[0]
+    norm_d2 = (d2 + epsilon) / (min_d2 + epsilon)
+    y_near = torch.multinomial(norm_d2.pow(-temperature), 1).squeeze(1)
 
     # Smoothed version of triplet loss: max(0, d2_same - d2_near + margin)
     d2_true = d2[range(d2.shape[0]), y_true] # ||anchor - positive||^2
