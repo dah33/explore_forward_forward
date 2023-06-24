@@ -6,7 +6,7 @@ I present a reference implementation of Hinton's algorithm, and two alternative 
 
 ## Reference Implementation
 
-In [hinton_goodness.py](.\hinton_goodness.py) I implement Hinton's algorithm using Pytorch on the MNIST dataset using a simple MLP with two hidden layers of 500 rectified linear units, as presented in his paper. 
+In [ff_hinton.py](.\ff_hinton.py) I implement Hinton's algorithm using PyTorch on the MNIST dataset using a simple MLP with two hidden layers of 500 rectified linear units, as presented in his paper. 
 
 Hinton's proposed loss function (see equations (1) and (3) in the paper) for the output of layer $k$:
 
@@ -62,7 +62,7 @@ Increasing the number of units in both hidden layers to 2,000, as per Hinton's p
 
 # Centroid Algorithm
 
-In `centroid.py` propose a new algorithm that sets $\mathcal{N}$ and $\mathcal{P}$ to be the "centroids" of each class. 
+In [`ff_centroids.py`](./ff_centroids.py) propose a new algorithm that sets $\mathcal{N}$ and $\mathcal{P}$ to be the "centroids" of each class. 
 
 The motivation for the algorithm is the observation that my implementation of Hinton's algorithm requires multiple forward passes for each example, to:
 

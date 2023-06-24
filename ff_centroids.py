@@ -48,7 +48,7 @@ def centroid_loss(h, y_true, alpha=4.0, epsilon=1e-12, temperature=1.0):
     # Smoothed version of triplet loss: max(0, d2_same - d2_near + margin)
     d2_true = d2[range(d2.shape[0]), y_true] # ||anchor - positive||^2
     d2_near = d2[range(d2.shape[0]), y_near] # ||anchor - negative||^2
-    return F.silu(alpha * (d2_true - d2_near)).mean()
+    return F.silu(alpha * (d2_true - d2_near)).mean(), (y_true == y_near).float().sum().item(), d2_true.mean(), d2_near.mean()
 
 # %%
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -69,6 +69,7 @@ n_units = 500 # 2000 improves error rate
 model = nn.Sequential(
     nn.Sequential(UnitLength(), nn.Linear(784, n_units), nn.ReLU()),
     nn.Sequential(UnitLength(), nn.Linear(n_units, n_units), nn.ReLU()),
+    #nn.Sequential(UnitLength(), nn.Linear(n_units, 3)),
 ).to(device)
 
 # %%
@@ -96,19 +97,57 @@ print_evaluation()
 for epoch in range(num_epochs):
 
     # Mini-batch training
+    n_same = [0.0,0.0,0.0]
+    n_samples = [0.0,0.0,0.0]
+    total_d2_true = [0,0,0]
+    total_d2_near = [0,0,0]
     for x, y in zip(split(x_tr, batch_size), split(y_tr, batch_size)):
 
-        # Train layers in turn, using backpropagation locally only
-        for layer in model:
+        # Train layers in turn on same mini-batch, using backpropagation locally only
+        for i,layer in enumerate(model):
             h = layer(x)
             temperature = 4
-            loss = centroid_loss(h, y, temperature=temperature)
+            loss, same, d2_true, d2_near = centroid_loss(h, y, temperature=temperature)
             optimiser.zero_grad()
             loss.backward()
             optimiser.step()
+            n_same[i] += same
+            n_samples[i] += x.shape[0]
+            total_d2_true[i] += d2_true
+            total_d2_near[i] += d2_near
             with torch.no_grad():
                 x = layer(x)
 
     # Evaluate the model on the training and test set
     if (epoch + 1) % 5 == 1:
         print_evaluation(epoch)
+        for i,_ in enumerate(model):
+            print(f"Layer {i}: {n_same[i]/n_samples[i]} same, {total_d2_near[i]/total_d2_true[i]} ratio")
+    
+# %%
+# Visualise the model, last layer only
+#%matplotlib qt 
+import numpy as np
+import matplotlib.pyplot as plt
+def plot_model(model, x, y, title=""):
+    with torch.no_grad():
+        h = model(x)
+    n_samples = 10000
+    h = h[:n_samples].cpu().numpy()
+    y = y[:n_samples].cpu().numpy()
+    fig = plt.figure(figsize=(8,8))
+    ax = fig.add_subplot(projection='3d')
+
+    colors = plt.cm.tab10(np.linspace(0, 1, 10))  # 10 distinct colors
+    for class_id in range(10):
+        ax.scatter(h[y == class_id, 0], h[y == class_id, 1], h[y == class_id, 2], 
+                   color=colors[class_id], cmap='tab10',
+                   s=3, alpha=0.8)
+
+    legend = plt.legend(handles=ax.collections, labels=range(10), loc='upper right')
+    for handle in legend.legend_handles:
+        handle._sizes = [20]
+    plt.title(title)
+    plt.show()
+plot_model(model, x_tr, y_tr, "Training set")
+# %%
