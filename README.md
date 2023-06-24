@@ -11,13 +11,13 @@ In [hinton_goodness.py](.\hinton_goodness.py) I implement Hinton's algorithm usi
 Hinton's proposed loss function (see equations (1) and (3) in the paper) for the output of layer $k$:
 
 $$
-\mathcal{L}(x) = \log(1+ e^{y(G - \theta)})
+\mathcal{L}(x) = \log(1+ e^{y(G_x - \theta)})
 $$
 
 where: 
 
-* $G = ||f(x)||^2$ is the *goodness* measure, where $f(x)$ is the output of layer $k$, parameterised by $x$, the *input* to the network. In other words, it's an embedding of $x$.
-* $y$ is the class of the input: 
+* $G_x = ||f(x)||^2$ is the *goodness* measure, where $f(x)$ is the output of layer $k$, parameterised by $x$, the *input* to the network. In other words, an embedding of $x$.
+* $y$ is the class of the input, $x$: 
   - $+1$ for *positive* inputs, with the correct label superimposed;
   - $-1$ for *negative* inputs, with an incorrect label superimposed.
 * $\theta$ is some threshold, a hyperparameter, the same for all layers.
