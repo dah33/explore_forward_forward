@@ -1,10 +1,14 @@
 # %%
+import os
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import split
 from torch.optim import Adam
+
 from utils import LayerOutputs, UnitLength
+
 
 def superimpose_label(x, y):
     x = x.clone()
@@ -122,11 +126,13 @@ def swish_loss(h_pos, h_neg, alpha=6.0):
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Using device:', device)
 
-# The data is pre-processed, to speed up this script
-x_tr = torch.load('./data/MNIST/baked/train_x.pt', device)
-y_tr = torch.load('./data/MNIST/baked/train_y.pt', device)
-x_te = torch.load('./data/MNIST/baked/test_x.pt', device)
-y_te = torch.load('./data/MNIST/baked/test_y.pt', device)
+# The data is preprocessed, to speed up this script
+# No need to use DataLoader as it fits in memory
+assert os.path.exists('./data/MNIST/preprocessed/'), "Preprocessed data not found. Run './preprocess_mnist.py' first."
+x_tr = torch.load('./data/MNIST/preprocessed/train_x.pt', device)
+y_tr = torch.load('./data/MNIST/preprocessed/train_y.pt', device)
+x_te = torch.load('./data/MNIST/preprocessed/test_x.pt', device)
+y_te = torch.load('./data/MNIST/preprocessed/test_y.pt', device)
 
 # %% Define the model
 # ----------------
@@ -163,7 +169,7 @@ batch_size = 4096
 print_evaluation()
 for epoch in range(num_epochs):
 
-    # Mini-batch training
+    # Mini-batch training (splitting tensors is faster than DataLoader)
     for x, y in zip(split(x_tr, batch_size), split(y_tr, batch_size)):
 
         # Positive examples: the true label

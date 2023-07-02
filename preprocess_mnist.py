@@ -4,7 +4,7 @@ from torchvision.transforms import Compose, ToTensor, Normalize, Lambda
 from torch.utils.data import DataLoader
 import os
 
-save_path = './data/MNIST/baked/'
+save_path = './data/MNIST/preprocessed/'
 os.makedirs(save_path, exist_ok=True)
 file_path = lambda x: os.path.join(save_path, x)
 
