@@ -62,7 +62,7 @@ Increasing the number of units in both hidden layers to 2,000, as per Hinton's p
 
 # Centroid Algorithm
 
-In [`ff_centroids.py`](./ff_centroids.py) propose a new algorithm that sets $\mathcal{N}$ and $\mathcal{P}$ to be the "centroids" of each class. 
+In [`ff_centroids.py`](./ff_centroids.py) propose a new algorithm that sets anchors as the "centroids" of each class. 
 
 The motivation for the algorithm is the observation that my implementation of Hinton's algorithm requires multiple forward passes for each example, to:
 
@@ -75,4 +75,4 @@ The centroid algorithm requires only one forward pass for each example. The mean
 
 The network makes a prediction by looking for the class with the closest centroids, summing over all layers. This could be achieved efficiently using a modern vector database.
 
-I show that this algorithm achieves an error rate on MNIST of ~2.0% after 120 epochs. After just one epoch, the error rate is ~11%.
+I show that this algorithm achieves an error rate on MNIST of ~1.70% after 60 epochs. After just one epoch, the error rate is ~10%.

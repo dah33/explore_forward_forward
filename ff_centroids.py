@@ -7,7 +7,7 @@ from torch.optim import Adam
 from utils import LayerOutputs, UnitLength
 
 # %%
-def distance2_to_centroids(h, y_true, epsilon=1e-12):
+def distance_to_centroids(h, y_true, epsilon=1e-12):
     """
     Calculates the mean squared distance to the centroid of each class. 
 
@@ -24,7 +24,7 @@ def distance2_to_centroids(h, y_true, epsilon=1e-12):
 @torch.no_grad()
 def predict(model, x, y_true, skip_layers=1):
     """Predict by finding the class with closest centroid to each example."""
-    d = sum([distance2_to_centroids(h, y_true) for h in LayerOutputs(model, x)][skip_layers:])
+    d = sum([distance_to_centroids(h, y_true) for h in LayerOutputs(model, x)][skip_layers:])
     return d.argmin(1) # type: ignore
 
 # %%
@@ -32,11 +32,11 @@ def centroid_loss(h, y_true, alpha=4.0, epsilon=1e-12, temperature=1.0):
     """
     Loss function based on distance^2 to the true centroid vs a nearby centroid.
     
-    Achieves an error rate of ~1.65%.
+    Achieves an error rate of ~1.7%.
     """
 
     # Distance from h to centroids of each class
-    d2 = distance2_to_centroids(h, y_true)
+    d2 = distance_to_centroids(h, y_true)
 
     # Choose a nearby class, at random, using the inverse distance as a
     # probability distribution, normalised by the minimum distance to avoid
@@ -55,10 +55,10 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Using device:', device)
 
 # The data is pre-processed, to speed up this script
-x_tr = torch.load('./data/MNIST/baked/train_x.pt', device)
-y_tr = torch.load('./data/MNIST/baked/train_y.pt', device)
-x_te = torch.load('./data/MNIST/baked/test_x.pt', device)
-y_te = torch.load('./data/MNIST/baked/test_y.pt', device)
+x_tr = torch.load('./data/MNIST/preprocessed/train_x.pt', device)
+y_tr = torch.load('./data/MNIST/preprocessed/train_y.pt', device)
+x_te = torch.load('./data/MNIST/preprocessed/test_x.pt', device)
+y_te = torch.load('./data/MNIST/preprocessed/test_y.pt', device)
 
 # %% 
 # Define the model
