@@ -11,7 +11,7 @@ In [ff_hinton.py](.\ff_hinton.py) I implement Hinton's algorithm using PyTorch o
 Hinton's proposed loss function (see equations (1) and (3) in the paper) for the output of layer $k$:
 
 $$
-\mathcal{L}(x) = \log(1+ e^{y(G_x - \theta)})
+\mathcal{L}(x) = \log(1+ e^{y(\theta - G_x)})
 $$
 
 where: 
@@ -23,7 +23,7 @@ where:
 * $\theta$ is some threshold, a hyperparameter, the same for all layers.
 
 The loss for the first layer is summed over all positive and negative inputs, then minimised, before the output of the now trained layer is passed to the next layer, and so on.
-
+  
 The network makes a prediction by superimposing all possible labels onto the input, and choosing the variant with the highest total goodness across the layers. I choose to average the goodness per neuron in each the layer, then sum across all layers. This ensures the $\theta$ are comparable, and all layers are weighted equally, regardless of their size. Hinton chooses to discard the goodness of the first layer for deeper networks.
 
 Like Hinton, I test this algorithm on the MNIST dataset. I show that training a simple model with two hidden layers of 500 units converges slowly to an error rate of ~2.7%, after 600 epochs. 
@@ -53,7 +53,7 @@ I show that training the same network as before, but using the SymBa loss functi
 The SymBa loss uses $log(1 + e^x)$ which is a soft approximation to $\text{max}(0, x)$. Another soft approximation is the [Swish](https://en.wikipedia.org/wiki/Swish_functions) function $x\sigma(x)$. It is non-monotonic below zero, which likely has a regularising effect. The SymBa loss becomes:
 
 $$
-\mathcal{L}(\mathcal{P},\mathcal{N}) = \frac{-\alpha(G_\mathcal{P} - G_\mathcal{N})}{1 + e^{\alpha(G_\mathcal{P} - G_\mathcal{N})}}
+\mathcal{L}(\mathcal{P},\mathcal{N}) = \frac{-\alpha(G_\mathcal{P} - G_\mathcal{N})}{1 + e^{-\alpha(G_\mathcal{P} - G_\mathcal{N})}}
 $$
 
 I show that this formulation improves on the SymBa loss, reducing the error rate to ~1.65%. After just one epoch, the error rate is ~12%. 
