@@ -62,8 +62,9 @@ Increasing the number of units in both hidden layers to 2,000, as per Hinton's p
 
 ## Alternative Implementation
 
-See `ff_pytorch_example.py` for an implementation based on the [Pytorch
-Example](https://github.com/pytorch/examples/blob/main/mnist_forward_forward/main.py).
+See [Pytorch
+Examples](https://github.com/pytorch/examples/blob/main/mnist_forward_forward/main.py)
+for an alternative implementation of Hinton's algorithm.
 
 # Centroid Algorithm
 
