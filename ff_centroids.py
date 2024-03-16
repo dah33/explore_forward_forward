@@ -2,11 +2,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch import split
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 
-from mnist import test_x, test_y, train_x, train_y
+import mnist
 from utils import LayerOutputs, UnitLength
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -59,12 +58,7 @@ def centroid_loss(h, y_true, alpha=4.0, epsilon=1e-12, temperature=1.0):
     # Smoothed version of triplet loss: max(0, d2_same - d2_near + margin)
     d2_true = d2[range(d2.shape[0]), y_true]  # ||anchor - positive||^2
     d2_near = d2[range(d2.shape[0]), y_near]  # ||anchor - negative||^2
-    return (
-        F.silu(alpha * (d2_true - d2_near)).mean(),
-        (y_true == y_near).float().sum().item(),
-        d2_true.mean(),
-        d2_near.mean(),
-    )
+    return F.silu(alpha * (d2_true - d2_near)).mean()
 
 
 # %%
@@ -79,19 +73,16 @@ model = nn.Sequential(
 ).to(device)
 
 
-# Evaluate the model on the training and test set
-def print_evaluation(epoch: int = None):
-    global model, device, train_x, train_y, test_x, test_y
-    x_tr, y_tr = train_x.to(device), train_y.to(device)
-    x_te, y_te = test_x.to(device), test_y.to(device)
-    error_rate = lambda x, y: 1.0 - torch.mean((x == y).float()).item()
-    prediction_error = lambda x, y: error_rate(predict(model, x, y), y)
-    train_error = prediction_error(x_tr, y_tr)
-    test_error = prediction_error(x_te, y_te)
-    epoch_str = "init" if epoch is None else f"{epoch:>4d}"
-    print(
-        f"[{epoch_str}] Training: {train_error*100:>5.2f}%\tTest: {test_error*100:>5.2f}%"
-    )
+def error_rate(model: nn.Sequential, data_loader: DataLoader) -> float:
+    model.eval()  # Set the model to evaluation mode
+    correct = 0
+    total = 0
+    for x, y in data_loader:
+        x, y = x.to(device), y.to(device)
+        predicted = predict(model, x, y)
+        correct += (predicted == y).sum().item()
+        total += y.size(0)
+    return 1 - correct / total
 
 
 # %%
@@ -99,41 +90,44 @@ def print_evaluation(epoch: int = None):
 torch.manual_seed(42)
 learning_rate = 0.05
 optimiser = Adam(model.parameters(), lr=learning_rate)
-num_epochs = 20  # 120 + 1
+num_epochs = 120 + 1
 batch_size = 4096
+train_loader = DataLoader(
+    list(zip(mnist.train_x, mnist.train_y)), batch_size=batch_size, shuffle=True
+)
+test_loader = DataLoader(
+    list(zip(mnist.test_x, mnist.test_y)), batch_size=batch_size, shuffle=False
+)
 
-print_evaluation()
+print(
+    "[init] Training: {:.2%}, Test: {:.2%}".format(
+        error_rate(model, train_loader),
+        error_rate(model, test_loader),
+    )
+)
 for epoch in range(num_epochs):
 
     # Mini-batch training
-    n_same = [0.0, 0.0, 0.0]
-    n_samples = [0.0, 0.0, 0.0]
-    total_d2_true = [0, 0, 0]
-    total_d2_near = [0, 0, 0]
-    for x, y in DataLoader(
-        list(zip(train_x, train_y)), batch_size=batch_size, shuffle=True
-    ):
+    for x, y in train_loader:
         x, y = x.to(device), y.to(device)
 
         # Train layers in turn on same mini-batch, using backpropagation locally only
-        for i, layer in enumerate(model):
+        for layer in model:
             h = layer(x)
             temperature = 4
-            loss, same, d2_true, d2_near = centroid_loss(h, y, temperature=temperature)
+            loss = centroid_loss(h, y, temperature=temperature)
             optimiser.zero_grad()
             loss.backward()
             optimiser.step()
-            n_same[i] += same
-            n_samples[i] += x.shape[0]
-            total_d2_true[i] += d2_true
-            total_d2_near[i] += d2_near
             with torch.no_grad():
                 x = layer(x)
 
     # Evaluate the model on the training and test set
     if (epoch + 1) % 5 == 1:
-        print_evaluation(epoch)
-        for i, _ in enumerate(model):
-            print(
-                f"Layer {i}: {n_same[i]/n_samples[i]} same, {total_d2_near[i]/total_d2_true[i]} ratio"
+        print(
+            "[{:>4d}] Training: {:.2%}, Test: {:.2%}".format(
+                epoch + 1,
+                error_rate(model, train_loader),
+                error_rate(model, test_loader),
             )
+        )

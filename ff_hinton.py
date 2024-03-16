@@ -6,7 +6,7 @@ from torch import split
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 
-from mnist import test_x, test_y, train_x, train_y
+import mnist
 from utils import LayerOutputs, UnitLength
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -141,19 +141,16 @@ model = nn.Sequential(
 ).to(device)
 
 
-# Evaluate the model on the training and test set
-def print_evaluation(epoch: int = None):
-    global model, device, train_x, train_y, test_x, test_y
-    x_tr, y_tr = train_x.to(device), train_y.to(device)
-    x_te, y_te = test_x.to(device), test_y.to(device)
-    error_rate = lambda x, y: 1.0 - torch.mean((x == y).float()).item()
-    prediction_error = lambda x, y: error_rate(predict(model, x), y)
-    train_error = prediction_error(x_tr, y_tr)
-    test_error = prediction_error(x_te, y_te)
-    epoch_str = "init" if epoch is None else f"{epoch:>4d}"
-    print(
-        f"[{epoch_str}] Training: {train_error*100:>5.2f}%\tTest: {test_error*100:>5.2f}%"
-    )
+def error_rate(model: nn.Sequential, data_loader: DataLoader) -> float:
+    model.eval()  # Set the model to evaluation mode
+    correct = 0
+    total = 0
+    for x, y in data_loader:
+        x, y = x.to(device), y.to(device)
+        predicted = predict(model, x)
+        correct += (predicted == y).sum().item()
+        total += y.size(0)
+    return 1 - correct / total
 
 
 # %%
@@ -164,15 +161,23 @@ learning_rate = 0.1 if loss_fn is hinton_loss else 0.35
 optimiser = Adam(model.parameters(), lr=learning_rate)
 num_epochs = 1 + (600 if loss_fn is hinton_loss else 60)
 batch_size = 4096
+train_loader = DataLoader(
+    list(zip(mnist.train_x, mnist.train_y)), batch_size=batch_size, shuffle=True
+)
+test_loader = DataLoader(
+    list(zip(mnist.test_x, mnist.test_y)), batch_size=batch_size, shuffle=False
+)
 
-print_evaluation()
+print(
+    "[init] Training: {:.2%}, Test: {:.2%}".format(
+        error_rate(model, train_loader),
+        error_rate(model, test_loader),
+    )
+)
 for epoch in range(num_epochs):
 
-    # Mini-batch training (splitting tensors is faster than DataLoader)
-    for x, y in DataLoader(
-        list(zip(train_x, train_y)), batch_size=batch_size, shuffle=True
-    ):
-
+    # Mini-batch training
+    for x, y in train_loader:
         x, y = x.to(device), y.to(device)
 
         # Positive examples: the true label
@@ -192,4 +197,10 @@ for epoch in range(num_epochs):
 
     # Evaluate the model on the training and test set
     if (epoch + 1) % 5 == 1:
-        print_evaluation(epoch)
+        print(
+            "[{:>4d}] Training: {:.2%}, Test: {:.2%}".format(
+                epoch + 1,
+                error_rate(model, train_loader),
+                error_rate(model, test_loader),
+            )
+        )
