@@ -4,11 +4,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import split
 from torch.optim import Adam
+from torch.utils.data import DataLoader
 
+from mnist import test_x, test_y, train_x, train_y
 from utils import LayerOutputs, UnitLength
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("Using device:", device)
 
-# %%
+
 def distance_to_centroids(h, y_true, epsilon=1e-12):
     """
     Calculates the mean squared distance to the centroid of each class.
@@ -35,7 +39,6 @@ def predict(model, x, y_true, skip_layers=1):
     return d.argmin(1)  # type: ignore
 
 
-# %%
 def centroid_loss(h, y_true, alpha=4.0, epsilon=1e-12, temperature=1.0):
     """
     Loss function based on distance^2 to the true centroid vs a nearby centroid.
@@ -65,32 +68,22 @@ def centroid_loss(h, y_true, alpha=4.0, epsilon=1e-12, temperature=1.0):
 
 
 # %%
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("Using device:", device)
-
-# The data is pre-processed, to speed up this script
-x_tr = torch.load("./data/MNIST/preprocessed/train_x.pt", device)
-y_tr = torch.load("./data/MNIST/preprocessed/train_y.pt", device)
-x_te = torch.load("./data/MNIST/preprocessed/test_x.pt", device)
-y_te = torch.load("./data/MNIST/preprocessed/test_y.pt", device)
-
-# %%
 # Define the model
-# ----------------
+#
 # Must be an iterable of layers. I find it works best if each layer starts with
 # a UnitLength() sub-layer.
 n_units = 500  # 2000 improves error rate
 model = nn.Sequential(
     nn.Sequential(UnitLength(), nn.Linear(784, n_units), nn.ReLU()),
     nn.Sequential(UnitLength(), nn.Linear(n_units, n_units), nn.ReLU()),
-    # nn.Sequential(UnitLength(), nn.Linear(n_units, 3)),
 ).to(device)
 
 
-# %%
 # Evaluate the model on the training and test set
-def print_evaluation(epoch=None):
-    global model, x_tr, y_tr, x_te, y_te
+def print_evaluation(epoch: int = None):
+    global model, device, train_x, train_y, test_x, test_y
+    x_tr, y_tr = train_x.to(device), train_y.to(device)
+    x_te, y_te = test_x.to(device), test_y.to(device)
     error_rate = lambda x, y: 1.0 - torch.mean((x == y).float()).item()
     prediction_error = lambda x, y: error_rate(predict(model, x, y), y)
     train_error = prediction_error(x_tr, y_tr)
@@ -102,15 +95,13 @@ def print_evaluation(epoch=None):
 
 
 # %%
-# Training parameters
+# Train the model
 torch.manual_seed(42)
 learning_rate = 0.05
 optimiser = Adam(model.parameters(), lr=learning_rate)
-num_epochs = 120 + 1
+num_epochs = 20  # 120 + 1
 batch_size = 4096
 
-# %%
-# Train the model
 print_evaluation()
 for epoch in range(num_epochs):
 
@@ -119,7 +110,10 @@ for epoch in range(num_epochs):
     n_samples = [0.0, 0.0, 0.0]
     total_d2_true = [0, 0, 0]
     total_d2_near = [0, 0, 0]
-    for x, y in zip(split(x_tr, batch_size), split(y_tr, batch_size)):
+    for x, y in DataLoader(
+        list(zip(train_x, train_y)), batch_size=batch_size, shuffle=True
+    ):
+        x, y = x.to(device), y.to(device)
 
         # Train layers in turn on same mini-batch, using backpropagation locally only
         for i, layer in enumerate(model):
@@ -143,42 +137,3 @@ for epoch in range(num_epochs):
             print(
                 f"Layer {i}: {n_same[i]/n_samples[i]} same, {total_d2_near[i]/total_d2_true[i]} ratio"
             )
-
-import matplotlib.pyplot as plt
-
-# %%
-# Visualise the model, last layer only
-# %matplotlib qt
-import numpy as np
-
-
-def plot_model(model, x, y, title=""):
-    with torch.no_grad():
-        h = model(x)
-    n_samples = 10000
-    h = h[:n_samples].cpu().numpy()
-    y = y[:n_samples].cpu().numpy()
-    fig = plt.figure(figsize=(8, 8))
-    ax = fig.add_subplot(projection="3d")
-
-    colors = plt.cm.tab10(np.linspace(0, 1, 10))  # 10 distinct colors
-    for class_id in range(10):
-        ax.scatter(
-            h[y == class_id, 0],
-            h[y == class_id, 1],
-            h[y == class_id, 2],
-            color=colors[class_id],
-            cmap="tab10",
-            s=3,
-            alpha=0.8,
-        )
-
-    legend = plt.legend(handles=ax.collections, labels=range(10), loc="upper right")
-    for handle in legend.legend_handles:
-        handle._sizes = [20]
-    plt.title(title)
-    plt.show()
-
-
-plot_model(model, x_tr, y_tr, "Training set")
-# %%

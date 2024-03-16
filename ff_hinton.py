@@ -1,13 +1,16 @@
 # %%
-import os
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import split
 from torch.optim import Adam
+from torch.utils.data import DataLoader
 
+from mnist import test_x, test_y, train_x, train_y
 from utils import LayerOutputs, UnitLength
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("Using device:", device)
 
 
 def superimpose_label(x, y):
@@ -17,7 +20,6 @@ def superimpose_label(x, y):
     return x
 
 
-# %%
 def goodness(h):
     """Goodness is the *mean* squared activation of a layer."""
     return h.pow(2).mean(1)
@@ -46,7 +48,6 @@ def predict(model, x):
     return goodness_per_class(model, x).argmax(1)
 
 
-# %%
 def make_examples(model, x, y_true, epsilon=1e-12):
     """
     Make some positive and negative examples.
@@ -69,7 +70,6 @@ def make_examples(model, x, y_true, epsilon=1e-12):
     return x_pos, x_neg
 
 
-# %%
 def hinton_loss(h_pos, h_neg, theta=2.0, alpha=1.0):
     """
     Calculate Hinton's Loss as per: https://arxiv.org/pdf/2212.13345.pdf
@@ -96,7 +96,6 @@ def hinton_loss(h_pos, h_neg, theta=2.0, alpha=1.0):
     return loss_pos + loss_neg
 
 
-# %%
 def symba_loss(h_pos, h_neg, alpha=4.0):
     """
     Calculate SymBa Loss as per: https://arxiv.org/pdf/2303.08418.pdf
@@ -113,7 +112,6 @@ def symba_loss(h_pos, h_neg, alpha=4.0):
     return F.softplus(-alpha * Delta).mean()
 
 
-# %%
 def swish_loss(h_pos, h_neg, alpha=6.0):
     """
     Calculate the Swish variant of SymBa Loss, see README.md for details.
@@ -131,23 +129,11 @@ def swish_loss(h_pos, h_neg, alpha=6.0):
 
 
 # %%
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("Using device:", device)
-
-# The data is preprocessed, to speed up this script
-# No need to use DataLoader as it fits in memory
-assert os.path.exists(
-    "./data/MNIST/preprocessed/"
-), "Preprocessed data not found. Run './preprocess_mnist.py' first."
-x_tr = torch.load("./data/MNIST/preprocessed/train_x.pt", device)
-y_tr = torch.load("./data/MNIST/preprocessed/train_y.pt", device)
-x_te = torch.load("./data/MNIST/preprocessed/test_x.pt", device)
-y_te = torch.load("./data/MNIST/preprocessed/test_y.pt", device)
-
-# %% Define the model
-# ----------------
+# Define the model
+#
 # Must be an iterable of layers, each of which start with a UnitLength()
 # sub-layer, to "conceal" goodness from the next layer.
+
 n_units = 500  # 2000 improves error rate
 model = nn.Sequential(
     nn.Sequential(UnitLength(), nn.Linear(784, n_units), nn.ReLU()),
@@ -155,10 +141,11 @@ model = nn.Sequential(
 ).to(device)
 
 
-# %%
 # Evaluate the model on the training and test set
-def print_evaluation(epoch=None):
-    global model, x_tr, y_tr, x_te, y_te
+def print_evaluation(epoch: int = None):
+    global model, device, train_x, train_y, test_x, test_y
+    x_tr, y_tr = train_x.to(device), train_y.to(device)
+    x_te, y_te = test_x.to(device), test_y.to(device)
     error_rate = lambda x, y: 1.0 - torch.mean((x == y).float()).item()
     prediction_error = lambda x, y: error_rate(predict(model, x), y)
     train_error = prediction_error(x_tr, y_tr)
@@ -170,7 +157,7 @@ def print_evaluation(epoch=None):
 
 
 # %%
-# Training parameters
+# Train the model
 torch.manual_seed(42)
 loss_fn = swish_loss  # hinton_loss
 learning_rate = 0.1 if loss_fn is hinton_loss else 0.35
@@ -178,13 +165,15 @@ optimiser = Adam(model.parameters(), lr=learning_rate)
 num_epochs = 1 + (600 if loss_fn is hinton_loss else 60)
 batch_size = 4096
 
-# %%
-# Train the model
 print_evaluation()
 for epoch in range(num_epochs):
 
     # Mini-batch training (splitting tensors is faster than DataLoader)
-    for x, y in zip(split(x_tr, batch_size), split(y_tr, batch_size)):
+    for x, y in DataLoader(
+        list(zip(train_x, train_y)), batch_size=batch_size, shuffle=True
+    ):
+
+        x, y = x.to(device), y.to(device)
 
         # Positive examples: the true label
         # Negative examples: a "hard" label that is not the true label
