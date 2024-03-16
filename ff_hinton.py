@@ -7,7 +7,7 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader
 
 import mnist
-from utils import LayerOutputs, UnitLength
+from ff_utils import LayerOutputs, UnitLength
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
