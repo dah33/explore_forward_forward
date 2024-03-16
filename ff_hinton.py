@@ -159,7 +159,7 @@ torch.manual_seed(42)
 loss_fn = swish_loss  # hinton_loss
 learning_rate = 0.1 if loss_fn is hinton_loss else 0.35
 optimiser = Adam(model.parameters(), lr=learning_rate)
-num_epochs = 1 + (600 if loss_fn is hinton_loss else 60)
+num_epochs = 600 if loss_fn is hinton_loss else 60
 batch_size = 4096
 train_loader = DataLoader(
     list(zip(mnist.train_x, mnist.train_y)), batch_size=batch_size, shuffle=False
@@ -197,10 +197,10 @@ for epoch in range(num_epochs):
                 x_pos, x_neg = layer(x_pos), layer(x_neg)
 
     # Evaluate the model on the training and test set
-    if (epoch + 1) % 5 == 1:
+    if epoch % 5 == 0:
         print(
             "[{:>4d}] Training: {:.2%}, Test: {:.2%}".format(
-                epoch + 1,
+                epoch,
                 error_rate(model, train_loader),
                 error_rate(model, test_loader),
             )

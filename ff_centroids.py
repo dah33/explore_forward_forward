@@ -90,7 +90,7 @@ def error_rate(model: nn.Sequential, data_loader: DataLoader) -> float:
 torch.manual_seed(42)
 learning_rate = 0.05
 optimiser = Adam(model.parameters(), lr=learning_rate)
-num_epochs = 120 + 1
+num_epochs = 120
 batch_size = 4096
 train_loader = DataLoader(
     list(zip(mnist.train_x, mnist.train_y)), batch_size=batch_size, shuffle=False
@@ -124,10 +124,10 @@ for epoch in range(num_epochs):
                 x = layer(x)
 
     # Evaluate the model on the training and test set
-    if (epoch + 1) % 5 == 1:
+    if epoch % 5 == 0:
         print(
             "[{:>4d}] Training: {:.2%}, Test: {:.2%}".format(
-                epoch + 1,
+                epoch,
                 error_rate(model, train_loader),
                 error_rate(model, test_loader),
             )
