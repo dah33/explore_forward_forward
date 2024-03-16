@@ -26,7 +26,7 @@ def goodness(h):
 
 
 @torch.no_grad()
-def goodness_per_class(model, x):
+def goodness_per_class(model: nn.Sequential, x):
     """
     Calculates the goodness for each class label.
 
@@ -43,12 +43,12 @@ def goodness_per_class(model, x):
 
 
 @torch.no_grad()
-def predict(model, x):
+def predict(model: nn.Sequential, x):
     """Predict the class with highest goodness."""
     return goodness_per_class(model, x).argmax(1)
 
 
-def make_examples(model, x, y_true, epsilon=1e-12):
+def make_examples(model: nn.Sequential, x, y_true, epsilon=1e-12):
     """
     Make some positive and negative examples.
 
