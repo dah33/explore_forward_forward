@@ -112,6 +112,7 @@ for epoch in range(num_epochs):
         x, y = x.to(device), y.to(device)
 
         # Train layers in turn on same mini-batch, using backpropagation locally only
+        model.train()
         for layer in model:
             h = layer(x)
             temperature = 4

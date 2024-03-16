@@ -186,6 +186,7 @@ for epoch in range(num_epochs):
         x_pos, x_neg = make_examples(model, x, y)
 
         # Train layers in turn, using backpropagation locally only
+        model.train()
         for layer in model:
             h_pos, h_neg = layer(x_pos), layer(x_neg)
             loss = loss_fn(h_pos, h_neg)
