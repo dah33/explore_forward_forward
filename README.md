@@ -60,6 +60,11 @@ I show that this formulation improves on the SymBa loss, reducing the error rate
 
 Increasing the number of units in both hidden layers to 2,000, as per Hinton's paper, reduces the error rate to ~1.35% using the Swish Variant.
 
+## Alternative Implementation
+
+See `ff_pytorch_example.py` for an implementation based on the [Pytorch
+Example](https://github.com/pytorch/examples/blob/main/mnist_forward_forward/main.py).
+
 # Centroid Algorithm
 
 In [`ff_centroids.py`](./ff_centroids.py) propose a new algorithm that sets anchors as the "centroids" of each class. 
