@@ -3,7 +3,7 @@ import os
 import torch
 from torch.utils.data import DataLoader
 from torchvision.datasets import MNIST
-from torchvision.transforms import Compose, Lambda, Normalize, ToTensor
+from torchvision.transforms import Compose, Normalize, ToTensor
 
 _PATH = "./data/MNIST/preprocessed/"
 _file_path = lambda x: os.path.join(_PATH, x)
@@ -16,7 +16,6 @@ def preprocess():
         [
             ToTensor(),
             Normalize((0.1307,), (0.3081,)),
-            Lambda(lambda x: torch.flatten(x)),
         ]
     )
 

@@ -2,6 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn import Flatten
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 
@@ -68,7 +69,7 @@ def centroid_loss(h, y_true, alpha=4.0, epsilon=1e-12, temperature=1.0):
 # a UnitLength() sub-layer.
 n_units = 500  # 2000 improves error rate
 model = nn.Sequential(
-    nn.Sequential(UnitLength(), nn.Linear(784, n_units), nn.ReLU()),
+    nn.Sequential(Flatten(), UnitLength(), nn.Linear(784, n_units), nn.ReLU()),
     nn.Sequential(UnitLength(), nn.Linear(n_units, n_units), nn.ReLU()),
 ).to(device)
 
