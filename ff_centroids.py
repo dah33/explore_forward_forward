@@ -93,7 +93,7 @@ optimiser = Adam(model.parameters(), lr=learning_rate)
 num_epochs = 120 + 1
 batch_size = 4096
 train_loader = DataLoader(
-    list(zip(mnist.train_x, mnist.train_y)), batch_size=batch_size, shuffle=True
+    list(zip(mnist.train_x, mnist.train_y)), batch_size=batch_size, shuffle=False
 )
 test_loader = DataLoader(
     list(zip(mnist.test_x, mnist.test_y)), batch_size=batch_size, shuffle=False
