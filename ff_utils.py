@@ -2,6 +2,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+def goodness(h):
+    """Goodness is the *mean* squared activation of a layer, which may be
+    multi-dimensional."""
+    return h.pow(2).flatten(1).mean(1)
+
+
 class UnitLength(nn.Module):
     """Layer that normalises its inputs to a unit length vector"""
 

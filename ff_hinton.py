@@ -7,7 +7,7 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader
 
 import mnist
-from ff_utils import LayerOutputs, UnitLength
+from ff_utils import LayerOutputs, UnitLength, goodness
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
@@ -18,11 +18,6 @@ def superimpose_label(x, y):
     x[:, 0, 0, :10] = 0
     x[range(x.shape[0]), 0, 0, y] = x.max()
     return x
-
-
-def goodness(h):
-    """Goodness is the *mean* squared activation of a layer."""
-    return h.pow(2).mean(1)
 
 
 @torch.no_grad()
