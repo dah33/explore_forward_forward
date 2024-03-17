@@ -9,10 +9,15 @@ def goodness(h):
 
 
 class UnitLength(nn.Module):
-    """Layer that normalises its inputs to a unit length vector"""
+    """Layer that normalises its (possibly multi-dimensional) inputs to a unit
+    length vector. Do this to "conceal" goodness from the next layer."""
 
     def forward(self, x):
-        return F.normalize(x)
+        original_shape = x.shape
+        x = x.view(x.size(0), -1)
+        x = F.normalize(x, p=2, dim=1)
+        x = x.view(original_shape)
+        return x
 
 
 class LayerOutputs:
