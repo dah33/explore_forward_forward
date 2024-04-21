@@ -7,7 +7,7 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader
 
 import mnist
-from ff_utils import LayerOutputs, UnitLength, goodness
+from ff_utils import LayerOutputs, SkipConnection, UnitLength, goodness
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
@@ -21,7 +21,7 @@ def superimpose_label(x, y):
 
 
 @torch.no_grad()
-def goodness_per_class(model: nn.Sequential, x):
+def goodness_per_class(model: nn.Sequential, x, skip_layers=0):
     """
     Calculates the goodness for each class label.
 
@@ -32,15 +32,19 @@ def goodness_per_class(model: nn.Sequential, x):
     g_per_label = []
     for label in range(10):
         x_candidate = superimpose_label(x, label)
-        g_candidate = sum(goodness(h) for h in LayerOutputs(model, x_candidate))
-        g_per_label.append(g_candidate.unsqueeze(1))  # type: ignore
+        g = 0
+        for i, h in enumerate(LayerOutputs(model, x_candidate)):
+            if i < skip_layers:
+                continue
+            g += goodness(h)
+        g_per_label.append(g.unsqueeze(1))  # type: ignore
     return torch.cat(g_per_label, 1)
 
 
 @torch.no_grad()
-def predict(model: nn.Sequential, x):
+def predict(model: nn.Sequential, x, skip_layers=0):
     """Predict the class with highest goodness."""
-    return goodness_per_class(model, x).argmax(1)
+    return goodness_per_class(model, x, skip_layers=skip_layers).argmax(1)
 
 
 def make_examples(model: nn.Sequential, x, y_true, epsilon=1e-12):
@@ -131,6 +135,19 @@ def swish_loss(h_pos, h_neg, alpha=6.0):
 
 n_units = 500  # 2000 improves error rate
 model = nn.Sequential(
+    SkipConnection(
+        nn.Sequential(
+            nn.Conv2d(1, 4, kernel_size=5, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+        )
+    ),
+    # nn.Sequential(
+    #     UnitLength(),
+    #     nn.Conv2d(10, 10, kernel_size=5, padding=2),
+    #     nn.ReLU(),
+    #     nn.MaxPool2d(kernel_size=2, stride=2),
+    # ),
     nn.Sequential(Flatten(), UnitLength(), nn.Linear(784, n_units), nn.ReLU()),
     nn.Sequential(UnitLength(), nn.Linear(n_units, n_units), nn.ReLU()),
 ).to(device)
@@ -142,7 +159,7 @@ def error_rate(model: nn.Sequential, data_loader: DataLoader) -> float:
     total = 0
     for x, y in data_loader:
         x, y = x.to(device), y.to(device)
-        predicted = predict(model, x)
+        predicted = predict(model, x, skip_layers=1)
         correct += (predicted == y).sum().item()
         total += y.size(0)
     return 1 - correct / total

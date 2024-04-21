@@ -41,3 +41,21 @@ class LayerOutputs:
         layer = next(self.layers)
         self.x = layer(self.x)
         return self.x
+
+
+class SkipConnection(nn.Module):
+    def __init__(self, module):
+        super(SkipConnection, self).__init__()
+        self.module = module
+
+    def forward(self, x):
+        # Pass input through the module
+        out = self.module(x)
+        # Check if the output shape matches the input shape
+        if out.shape == x.shape:
+            # Add the input to the output
+            return out + x
+        else:
+            raise ValueError(
+                "Output shape of the module does not match the input shape"
+            )
