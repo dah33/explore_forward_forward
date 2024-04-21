@@ -2,7 +2,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn import Flatten
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 
@@ -67,10 +66,24 @@ def centroid_loss(h, y_true, alpha=4.0, epsilon=1e-12, temperature=1.0):
 #
 # Must be an iterable of layers. I find it works best if each layer starts with
 # a UnitLength() sub-layer.
-n_units = 500  # 2000 improves error rate
 model = nn.Sequential(
-    nn.Sequential(Flatten(), UnitLength(), nn.Linear(784, n_units), nn.ReLU()),
-    nn.Sequential(UnitLength(), nn.Linear(n_units, n_units), nn.ReLU()),
+    nn.Sequential(
+        nn.Conv2d(1, 10, kernel_size=5, padding=2),
+        nn.ReLU(),
+        nn.MaxPool2d(kernel_size=2, stride=2),
+    ),
+    nn.Sequential(
+        UnitLength(),
+        nn.Conv2d(10, 10, kernel_size=5, padding=2),
+        nn.ReLU(),
+        nn.MaxPool2d(kernel_size=2, stride=2),
+    ),
+    nn.Sequential(
+        nn.Flatten(),
+        UnitLength(),
+        nn.Linear(10 * 7 * 7, 512),
+        nn.ReLU(),
+    ),
 ).to(device)
 
 
