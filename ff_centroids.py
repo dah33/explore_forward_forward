@@ -13,26 +13,69 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 
 
-def distance_to_centroids(h, y_true, epsilon=1e-12):
+def distance_to_centroids(
+    h: torch.Tensor,
+    y_true: torch.Tensor,
+    return_ytrue: bool = False,
+    epsilon: float = 1e-12,
+) -> tuple[torch.Tensor, torch.Tensor]:
     """
-    Calculates the mean squared distance to the centroid of each class.
+    Calculates the mean squared distance to the centroid of each class present in the batch
+    and returns the remapped y_true with new class indices.
 
-    Returns a tensor of shape [n_examples, 10].
+    Args:
+        h: A tensor of shape (n_examples, n_features)
+        y_true: A tensor of shape (n_examples,) giving true labels for the batch
+        return_ytrue: Whether to return the remapped y_true with new class indices
+        epsilon: Small number to prevent division by zero
+
+    Returns:
+        distances: A tensor of shape (n_examples, n_classes_in_batch)
+        remapped_y_true: A tensor of shape (n_examples,) giving y_true remapped to new class indices
+
+    Example usage with dummy data:
+        >>> h = torch.rand(5, 2)  # 5 examples, 2 features each
+        >>> y_true = torch.randint(0, 10, (5,))  # Random classes from 0 to 9 for each example
+        >>> distances, remapped_y_true = distance_to_centroids(h, y_true, return_ytrue=True)
+        >>> print(distances.shape, remapped_y_true, sep='\n')
+        torch.Size([5, 3])
+        tensor([2, 1, 1, 1, 0]) # values may vary
     """
     safe_mean = lambda x, dim: x.sum(dim) / (x.shape[dim] + epsilon)
-    # TODO: what if class is missing?
-    # * determine centroids only for classes that are present, and return torch.unique(y_true)
-    # * or treat centroids as trainable parameters, so they slowly update
+
+    # Identify the unique classes present in the batch and their mapping
+    classes_in_batch, remapped_y_true = torch.unique(
+        y_true, sorted=True, return_inverse=True
+    )
+
+    # Calculate centroids for the classes present in the batch
     class_centroids = torch.stack(
-        [safe_mean(h[y_true == i], 0) for i in range(10)], dim=1
-    )  # [n_in, 10]
-    x_to_centroids = h.unsqueeze(2) - class_centroids  # [n_examples, n_in, 10]
-    return x_to_centroids.pow(2).mean(1)  # [n_examples, 10]
+        [
+            safe_mean(h[remapped_y_true == idx], 0)
+            for idx in range(classes_in_batch.size(0))
+        ],
+        dim=1,
+    )
+
+    # Compute distances from each example to its class centroid
+    x_to_centroids = (
+        h.unsqueeze(2) - class_centroids
+    )  # [n_examples, n_features, n_classes_in_batch]
+    distances = x_to_centroids.pow(2).mean(1)  # [n_examples, n_classes_in_batch]
+
+    return (distances, remapped_y_true) if return_ytrue else distances
 
 
 @torch.no_grad()
 def predict(model: nn.Sequential, x, y_true, skip_layers=1):
-    """Predict by finding the class with closest centroid to each example."""
+    """
+    Predict by finding the class with closest centroid to each example.
+
+    TODO: If there's only one or a few examples of a class, the centroid will be
+    very close to the example itself, a data leakage issue. This can be fixed by
+    excluding the example from the centroid calculation, using the training
+    centroids, or somehow using a different method to predict.
+    """
     d = sum(
         [distance_to_centroids(h, y_true) for h in LayerOutputs(model, x)][skip_layers:]
     )
@@ -46,8 +89,8 @@ def centroid_loss(h, y_true, alpha=4.0, epsilon=1e-12, temperature=1.0):
     Achieves an error rate of ~1.7%.
     """
 
-    # Distance from h to centroids of each class
-    d = distance_to_centroids(h, y_true)
+    # Distance from h to centroids of each class (in the batch)
+    d, y_true = distance_to_centroids(h, y_true, return_ytrue=True)
 
     # Choose a nearby class, at random, using the inverse distance as a
     # probability distribution. To stop torch.multinomial getting out-of-range
