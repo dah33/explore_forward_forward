@@ -41,25 +41,25 @@ def predict(model: nn.Sequential, x, y_true, skip_layers=1):
 
 def centroid_loss(h, y_true, alpha=4.0, epsilon=1e-12, temperature=1.0):
     """
-    Loss function based on distance^2 to the true centroid vs a nearby centroid.
+    Loss function based on (squared) distance to the true centroid vs a nearby centroid.
 
     Achieves an error rate of ~1.7%.
     """
 
     # Distance from h to centroids of each class
-    d2 = distance_to_centroids(h, y_true)
+    d = distance_to_centroids(h, y_true)
 
     # Choose a nearby class, at random, using the inverse distance as a
-    # probability distribution, normalised by the minimum distance to avoid
-    # out-of-range values.
-    min_d2 = torch.min(d2, 1, keepdim=True)[0]
-    norm_d2 = (d2 + epsilon) / (min_d2 + epsilon)
-    y_near = torch.multinomial(norm_d2.pow(-temperature), 1).squeeze(1)
+    # probability distribution. To stop torch.multinomial getting out-of-range
+    # values, we first normalised by the minimum distance.
+    min_d = torch.min(d, 1, keepdim=True)[0]
+    norm_d = (d + epsilon) / (min_d + epsilon)
+    y_near = torch.multinomial(norm_d.pow(-temperature), 1).squeeze(1)
 
     # Smoothed version of triplet loss: max(0, d2_same - d2_near + margin)
-    d2_true = d2[range(d2.shape[0]), y_true]  # ||anchor - positive||^2
-    d2_near = d2[range(d2.shape[0]), y_near]  # ||anchor - negative||^2
-    return F.silu(alpha * (d2_true - d2_near)).mean()
+    d_true = d[range(d.shape[0]), y_true]  # ||anchor - positive||^2
+    d_near = d[range(d.shape[0]), y_near]  # ||anchor - negative||^2
+    return F.silu(alpha * (d_true - d_near)).mean()
 
 
 # %%
