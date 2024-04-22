@@ -1,4 +1,6 @@
 # %%
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -17,7 +19,6 @@ def distance_to_centroids(
     h: torch.Tensor,
     y_true: torch.Tensor,
     return_ytrue: bool = False,
-    epsilon: float = 1e-12,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Calculates the mean squared distance to the centroid of each class present in the batch
@@ -27,7 +28,6 @@ def distance_to_centroids(
         h: A tensor of shape (n_examples, n_features)
         y_true: A tensor of shape (n_examples,) giving true labels for the batch
         return_ytrue: Whether to return the remapped y_true with new class indices
-        epsilon: Small number to prevent division by zero
 
     Returns:
         distances: A tensor of shape (n_examples, n_classes_in_batch)
@@ -41,21 +41,18 @@ def distance_to_centroids(
         torch.Size([5, 3])
         tensor([2, 1, 1, 1, 0]) # values may vary
     """
-    safe_mean = lambda x, dim: x.sum(dim) / (x.shape[dim] + epsilon)
-
     # Identify the unique classes present in the batch and their mapping
     classes_in_batch, remapped_y_true = torch.unique(
         y_true, sorted=True, return_inverse=True
     )
 
     # Calculate centroids for the classes present in the batch
-    class_centroids = torch.stack(
-        [
-            safe_mean(h[remapped_y_true == idx], 0)
-            for idx in range(classes_in_batch.size(0))
-        ],
-        dim=1,
-    )
+    class_centroids = []
+    for idx in range(classes_in_batch.size(0)):
+        mask = remapped_y_true == idx
+        class_mean = h[mask].mean(dim=0)
+        class_centroids.append(class_mean)
+    class_centroids = torch.stack(class_centroids, dim=1)
 
     # Compute distances from each example to its class centroid
     x_to_centroids = (
@@ -82,27 +79,18 @@ def predict(model: nn.Sequential, x, y_true, skip_layers=1):
     return d.argmin(1)  # type: ignore
 
 
-def centroid_loss(h, y_true, alpha=4.0, epsilon=1e-12, temperature=1.0):
+def centroid_loss(h, y_true, temperature=1.0):
     """
-    Loss function based on (squared) distance to the true centroid vs a nearby centroid.
+    Loss function based on (squared) distance to the true centroid vs other centroids.
 
-    Achieves an error rate of ~1.7%.
+    Achieves an error rate of ~2.2%.
     """
 
     # Distance from h to centroids of each class (in the batch)
     d, y_true = distance_to_centroids(h, y_true, return_ytrue=True)
 
-    # Choose a nearby class, at random, using the inverse distance as a
-    # probability distribution. To stop torch.multinomial getting out-of-range
-    # values, we first normalised by the minimum distance.
-    min_d = torch.min(d, 1, keepdim=True)[0]
-    norm_d = (d + epsilon) / (min_d + epsilon)
-    y_near = torch.multinomial(norm_d.pow(-temperature), 1).squeeze(1)
-
-    # Smoothed version of triplet loss: max(0, d2_same - d2_near + margin)
-    d_true = d[range(d.shape[0]), y_true]  # ||anchor - positive||^2
-    d_near = d[range(d.shape[0]), y_near]  # ||anchor - negative||^2
-    return F.silu(alpha * (d_true - d_near)).mean()
+    # Softmax then calculate the cross-entropy loss
+    return F.cross_entropy(-d * math.exp(temperature), y_true, reduction="mean")
 
 
 # %%
