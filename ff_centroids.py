@@ -15,52 +15,36 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 
 
-def distance_to_centroids(
-    h: torch.Tensor,
-    y_true: torch.Tensor,
-    return_ytrue: bool = False,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """
-    Calculates the mean squared distance to the centroid of each class present in the batch
-    and returns the remapped y_true with new class indices.
+def calculate_distance_matrix(x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
+    # TODO: review this for clarity--should be for general x1 and x2, not just h and centroids
+    x1_to_x2 = x1.unsqueeze(2) - x2.T  # [n_examples, n_features, n_classes_in_batch]
+    return x1_to_x2.pow(2).mean(1)  # [n_examples, n_classes_in_batch]
+    # Couldn't get the following to work, not sure why:
+    # # Unsqueeze to add a dummy dimension, then squeeze to remove it
+    # return torch.cdist(x1.unsqueeze(0), x2.unsqueeze(0)).pow(2).squeeze(0)
 
-    Args:
-        h: A tensor of shape (n_examples, n_features)
-        y_true: A tensor of shape (n_examples,) giving true labels for the batch
-        return_ytrue: Whether to return the remapped y_true with new class indices
+
+def remap_class_labels(labels):
+    """
+    Remap the class labels so there are no gaps in the indices.
 
     Returns:
-        distances: A tensor of shape (n_examples, n_classes_in_batch)
-        remapped_y_true: A tensor of shape (n_examples,) giving y_true remapped to new class indices
+        new_labels: A tensor of shape (n_examples,) with class indices remapped
+                    to be contiguous integers starting from 0
 
-    Example usage with dummy data:
-        >>> h = torch.rand(5, 2)  # 5 examples, 2 features each
-        >>> y_true = torch.randint(0, 10, (5,))  # Random classes from 0 to 9 for each example
-        >>> distances, remapped_y_true = distance_to_centroids(h, y_true, return_ytrue=True)
-        >>> print(distances.shape, remapped_y_true, sep='\n')
-        torch.Size([5, 3])
-        tensor([2, 1, 1, 1, 0]) # values may vary
+        class_map: A tensor of shape (n_classes,) giving the original class
+                   labels
     """
-    # Identify the unique classes present in the batch and their mapping
-    classes_in_batch, remapped_y_true = torch.unique(
-        y_true, sorted=True, return_inverse=True
-    )
+    class_map, new_labels = labels.unique(return_inverse=True, sorted=True)
+    return new_labels, class_map
 
-    # Calculate centroids for the classes present in the batch
-    class_centroids = []
-    for idx in range(classes_in_batch.size(0)):
-        mask = remapped_y_true == idx
-        class_mean = h[mask].mean(dim=0)
-        class_centroids.append(class_mean)
-    class_centroids = torch.stack(class_centroids, dim=1)
 
-    # Compute distances from each example to its class centroid
-    x_to_centroids = (
-        h.unsqueeze(2) - class_centroids
-    )  # [n_examples, n_features, n_classes_in_batch]
-    distances = x_to_centroids.pow(2).mean(1)  # [n_examples, n_classes_in_batch]
-
-    return (distances, remapped_y_true) if return_ytrue else distances
+def calculate_class_centroids(h, labels):
+    classes = labels.unique(sorted=True)
+    assert classes[0] == 0, "Labels must start from 0"
+    assert classes[-1] == len(classes) - 1, "Labels must be contiguous"
+    class_centroids = [h[labels == cls].mean(dim=0) for cls in classes]
+    return torch.stack(class_centroids)
 
 
 @torch.no_grad()
@@ -71,12 +55,18 @@ def predict(model: nn.Sequential, x, y_true, skip_layers=1):
     TODO: If there's only one or a few examples of a class, the centroid will be
     very close to the example itself, a data leakage issue. This can be fixed by
     excluding the example from the centroid calculation, using the training
-    centroids, or somehow using a different method to predict.
+    centroids, or somehow using a different method to predict. If there's no
+    examples then it won't even be considered, another data leakage issue.
     """
-    d = sum(
-        [distance_to_centroids(h, y_true) for h in LayerOutputs(model, x)][skip_layers:]
-    )
-    return d.argmin(1)  # type: ignore
+    y_true, class_map = remap_class_labels(y_true)
+
+    distance_matrices: list[torch.tensor] = []
+    for h in LayerOutputs(model, x):
+        class_centroids = calculate_class_centroids(h, y_true)
+        distance_matrices.append(calculate_distance_matrix(h, class_centroids))
+    distance_matrix = sum(distance_matrices[skip_layers:])
+    predictions = distance_matrix.argmin(1)
+    return class_map[predictions]
 
 
 def centroid_loss(h, y_true, temperature=1.0):
@@ -85,9 +75,10 @@ def centroid_loss(h, y_true, temperature=1.0):
 
     Achieves an error rate of ~2.2%.
     """
-
-    # Distance from h to centroids of each class (in the batch)
-    d, y_true = distance_to_centroids(h, y_true, return_ytrue=True)
+    # Distance from h to centroids of each class
+    y_true, _ = remap_class_labels(y_true)
+    centroids = calculate_class_centroids(h, y_true)
+    d = calculate_distance_matrix(h, centroids)
 
     # Softmax then calculate the cross-entropy loss
     return F.cross_entropy(-d * math.exp(temperature), y_true, reduction="mean")
