@@ -141,12 +141,13 @@ torch.manual_seed(42)
 learning_rate = 0.001
 optimiser = Adam(model.parameters(), lr=learning_rate)
 num_epochs = 50
-batch_size = 4096
+train_batch_size = 512
+test_batch_size = len(mnist.test_x) # calc centroids over full batch
 train_loader = DataLoader(
-    list(zip(mnist.train_x, mnist.train_y)), batch_size=batch_size, shuffle=True
+    list(zip(mnist.train_x, mnist.train_y)), batch_size=train_batch_size, shuffle=True
 )
 test_loader = DataLoader(
-    list(zip(mnist.test_x, mnist.test_y)), batch_size=batch_size, shuffle=True
+    list(zip(mnist.test_x, mnist.test_y)), batch_size=test_batch_size, shuffle=True
 )
 
 print(
