@@ -9,7 +9,7 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader
 
 import mnist
-from ff_utils import LayerOutputs, UnitLength
+from ff_utils import LayerOutputs
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
@@ -48,7 +48,7 @@ def calculate_class_centroids(h, labels):
 
 
 @torch.no_grad()
-def predict(model: nn.Sequential, x, y_true, skip_layers=1):
+def predict(model: nn.Sequential, x, y_true, skip_layers: int = 1):
     """
     Predict by finding the class with closest centroid to each example.
 
@@ -59,6 +59,7 @@ def predict(model: nn.Sequential, x, y_true, skip_layers=1):
     examples then it won't even be considered, another data leakage issue.
     """
     y_true, class_map = remap_class_labels(y_true)
+    assert skip_layers >= 0 and skip_layers < len(model), "Invalid skip_layers"
 
     distance_matrices: list[torch.tensor] = []
     for h in LayerOutputs(model, x):
@@ -69,11 +70,23 @@ def predict(model: nn.Sequential, x, y_true, skip_layers=1):
     return class_map[predictions]
 
 
-def centroid_loss(h, y_true, temperature=1.0):
+def centroid_loss(h, y_true, temperature=4.0, regulariser=0.1):
     """
-    Loss function based on (squared) distance to the true centroid vs other centroids.
+    Loss function based on (squared) distance to the true centroid vs other
+    centroids.
 
-    Achieves an error rate of ~2.2%.
+    Achieves an error rate of ~1.7%.
+
+    The regulariser is the Label Smoothing Regulariser [1], a float between 0
+    and 1. It mixes in a uniform distribution over the class probabilities,
+    preventing the model becoming overconfident in its predictions.
+
+    In the context of centroid loss, it can be thought of as forcing the model
+    to give some consideration to the off-diagonal elements of the distance
+    matrix. We want the outputs to not only be close to their true centroid, but
+    also far from the other centroids.
+
+    [1] https://arxiv.org/pdf/1512.00567
     """
     # Distance from h to centroids of each class
     y_true, _ = remap_class_labels(y_true)
@@ -81,18 +94,32 @@ def centroid_loss(h, y_true, temperature=1.0):
     d = calculate_distance_matrix(h, centroids)
 
     # Softmax then calculate the cross-entropy loss
-    return F.cross_entropy(-d * math.exp(temperature), y_true, reduction="mean")
+    return F.cross_entropy(
+        -d * math.exp(temperature),
+        y_true,
+        reduction="mean",
+        label_smoothing=regulariser,
+    )
 
 
 # %%
 # Define the model
 #
-# Must be an iterable of layers. I find it works best if each layer starts with
-# a UnitLength() sub-layer.
+# Must be an iterable of layers.
 n_units = 500  # 2000 improves error rate
 model = nn.Sequential(
-    nn.Sequential(Flatten(), UnitLength(), nn.Linear(784, n_units), nn.ReLU()),
-    nn.Sequential(UnitLength(), nn.Linear(n_units, n_units), nn.ReLU()),
+    nn.Sequential(
+        Flatten(),
+        nn.LayerNorm(784),
+        nn.Linear(784, n_units),
+        nn.BatchNorm1d(n_units),
+        nn.ReLU(),
+    ),
+    nn.Sequential(
+        nn.Linear(n_units, n_units),
+        nn.BatchNorm1d(n_units),
+        nn.ReLU(),
+    ),
 ).to(device)
 
 
@@ -111,15 +138,15 @@ def error_rate(model: nn.Sequential, data_loader: DataLoader) -> float:
 # %%
 # Train the model
 torch.manual_seed(42)
-learning_rate = 0.05
+learning_rate = 0.001
 optimiser = Adam(model.parameters(), lr=learning_rate)
-num_epochs = 120
+num_epochs = 50
 batch_size = 4096
 train_loader = DataLoader(
-    list(zip(mnist.train_x, mnist.train_y)), batch_size=batch_size, shuffle=False
+    list(zip(mnist.train_x, mnist.train_y)), batch_size=batch_size, shuffle=True
 )
 test_loader = DataLoader(
-    list(zip(mnist.test_x, mnist.test_y)), batch_size=batch_size, shuffle=False
+    list(zip(mnist.test_x, mnist.test_y)), batch_size=batch_size, shuffle=True
 )
 
 print(
@@ -138,8 +165,7 @@ for epoch in range(num_epochs):
         model.train()
         for layer in model:
             h = layer(x)
-            temperature = 4
-            loss = centroid_loss(h, y, temperature=temperature)
+            loss = centroid_loss(h, y)
             optimiser.zero_grad()
             loss.backward()
             optimiser.step()
@@ -147,11 +173,10 @@ for epoch in range(num_epochs):
                 x = layer(x)
 
     # Evaluate the model on the training and test set
-    if epoch % 5 == 0:
-        print(
-            "[{:>4d}] Training: {:.2%}, Test: {:.2%}".format(
-                epoch,
-                error_rate(model, train_loader),
-                error_rate(model, test_loader),
-            )
+    print(
+        "[{:>4d}] Training: {:.2%}, Test: {:.2%}".format(
+            epoch,
+            error_rate(model, train_loader),
+            error_rate(model, test_loader),
         )
+    )
