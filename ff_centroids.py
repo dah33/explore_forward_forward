@@ -17,18 +17,17 @@ print("Using device:", device)
 
 def calculate_distance_matrix(x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
     """
-    Return the squared Euclidean distance between each pair of vectors in x1 and x2.
+    Return the cosine distance between each pair of vectors in x1 and x2.
 
     Args:
         x1 [N, D]
         x2 [M, D]
 
     Returns:
-        [N, M] matrix of squared Euclidean distances between each pair of vectors x1[i] and x2[j]
+        [N, M] matrix of distance between each pair of vectors x1[i] and x2[j]
     """
     assert x1.size(1) == x2.size(1), "x1 and x2 must have the same number of features"
-    x1_to_x2 = x1.unsqueeze(2) - x2.T  # [N, D, M]
-    return x1_to_x2.pow(2).mean(1)  # [N, M]
+    return -F.cosine_similarity(x1[:, None, :], x2[None, :, :], dim=2)
 
 
 def remap_class_labels(labels):
@@ -82,7 +81,7 @@ def centroid_loss(h, y_true, temperature=4.0, regulariser=0.1):
     Loss function based on (squared) distance to the true centroid vs other
     centroids.
 
-    Achieves an error rate of ~1.7%.
+    Achieves an error rate of ~1.6%.
 
     The regulariser is the Label Smoothing Regulariser [1], a float between 0
     and 1. It mixes in a uniform distribution over the class probabilities,
@@ -117,14 +116,13 @@ n_units = 500  # 2000 improves error rate
 model = nn.Sequential(
     nn.Sequential(
         Flatten(),
-        nn.LayerNorm(784),
         nn.Linear(784, n_units),
-        nn.BatchNorm1d(n_units),
+        #nn.BatchNorm1d(n_units),
         nn.ReLU(),
     ),
     nn.Sequential(
         nn.Linear(n_units, n_units),
-        nn.BatchNorm1d(n_units),
+        #nn.BatchNorm1d(n_units),
         nn.ReLU(),
     ),
 ).to(device)
