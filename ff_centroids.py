@@ -17,7 +17,7 @@ print("Using device:", device)
 
 def calculate_distance_matrix(x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
     # TODO: review this for clarity--should be for general x1 and x2, not just h and centroids
-    x1_to_x2 = x1.unsqueeze(2) - x2.T  # [n_examples, n_features, n_classes_in_batch]
+    x1_to_x2 = x1.unsqueeze(2) - x2  # [n_examples, n_features, n_classes_in_batch]
     return x1_to_x2.pow(2).mean(1)  # [n_examples, n_classes_in_batch]
     # Couldn't get the following to work, not sure why:
     # # Unsqueeze to add a dummy dimension, then squeeze to remove it
@@ -44,7 +44,7 @@ def calculate_class_centroids(h, labels):
     assert classes[0] == 0, "Labels must start from 0"
     assert classes[-1] == len(classes) - 1, "Labels must be contiguous"
     class_centroids = [h[labels == cls].mean(dim=0) for cls in classes]
-    return torch.stack(class_centroids)
+    return torch.stack(class_centroids, dim=1)
 
 
 @torch.no_grad()
