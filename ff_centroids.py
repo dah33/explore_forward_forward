@@ -17,11 +17,17 @@ print("Using device:", device)
 
 def calculate_distance_matrix(x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
     """
+    Return the squared Euclidean distance between each pair of vectors in x1 and x2.
+
     Args:
         x1 [N, D]
         x2 [M, D]
+
+    Returns:
+        [N, M] matrix of squared Euclidean distances between each pair of vectors x1[i] and x2[j]
     """
-    x1_to_x2 = x1.unsqueeze(2) - x2  # [N, D, M]
+    assert x1.size(1) == x2.size(1), "x1 and x2 must have the same number of features"
+    x1_to_x2 = x1.unsqueeze(2) - x2.T  # [N, D, M]
     return x1_to_x2.pow(2).mean(1)  # [N, M]
 
 
@@ -45,7 +51,7 @@ def calculate_class_centroids(h, labels):
     assert classes[0] == 0, "Labels must start from 0"
     assert classes[-1] == len(classes) - 1, "Labels must be contiguous"
     class_centroids = [h[labels == cls].mean(dim=0) for cls in classes]
-    return torch.stack(class_centroids, dim=1)
+    return torch.stack(class_centroids)
 
 
 @torch.no_grad()
