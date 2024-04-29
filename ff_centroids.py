@@ -73,35 +73,61 @@ def predict(model: nn.Sequential, x, y_true, skip_layers: int = 1):
     return class_map[predictions]
 
 
-def centroid_loss(h, y_true, temperature=4.0, regulariser=0.1):
+def pairwise_loss(
+    x1: torch.Tensor,
+    x2: torch.Tensor,
+    label: torch.Tensor,
+    temperature: float = 0.0,
+    regulariser: float = 0.0,
+):
     """
-    Loss function based on distance to the true centroid vs other centroids.
+    Loss function based on distance between pairs of examples. Inspired by the
+    CLIP paper [1]. The label selects the correct class representative in x2 for
+    each example x1.
 
-    Achieves an error rate of ~1.6%.
-
-    The regulariser is the Label Smoothing Regulariser [1], a float between 0
+    The regulariser is the Label Smoothing Regulariser [2], a float between 0
     and 1. It mixes in a uniform distribution over the class probabilities,
     preventing the model becoming overconfident in its predictions.
 
     In the context of centroid loss, it can be thought of as forcing the model
     to give some consideration to the off-diagonal elements of the distance
-    matrix. We want the outputs to not only be close to their true centroid, but
-    also far from the other centroids.
+    matrix (assuming the labels are aligned to the diagonal). We want the
+    outputs to not only be close to their true centroid, but also far from the
+    other centroids.
 
-    [1] https://arxiv.org/pdf/1512.00567
+    [1] https://arxiv.org/pdf/2103.00020
+    [2] https://arxiv.org/pdf/1512.00567
     """
-    # Distance from h to centroids of each class
-    y_true, _ = remap_class_labels(y_true)
-    centroids = calculate_class_centroids(h, y_true)
-    d = calculate_distance_matrix(h, centroids)
+    assert x1.size(0) == label.size(
+        0
+    ), "x1 and label must have the same number of examples"
+
+    # Distance between each pair of examples
+    d = calculate_distance_matrix(x1, x2)
 
     # Softmax then calculate the cross-entropy loss
     return F.cross_entropy(
         -d * math.exp(temperature),
-        y_true,
+        label,
         reduction="mean",
         label_smoothing=regulariser,
     )
+
+
+def centroid_loss(
+    h: torch.Tensor,
+    y_true: torch.Tensor,
+    temperature: float = 4.0,
+    regulariser: float = 0.1,
+):
+    """
+    Loss function based on distance to the true centroid vs other centroids.
+
+    Achieves an error rate of ~1.6%.
+    """
+    y_true, _ = remap_class_labels(y_true)
+    centroids = calculate_class_centroids(h, y_true)
+    return pairwise_loss(h, centroids, y_true, temperature, regulariser)
 
 
 # %%
@@ -141,7 +167,7 @@ learning_rate = 0.001
 optimiser = Adam(model.parameters(), lr=learning_rate)
 num_epochs = 50
 train_batch_size = 512
-test_batch_size = len(mnist.test_x) # calc centroids over full batch
+test_batch_size = len(mnist.test_x)  # calc centroids over full batch
 train_loader = DataLoader(
     list(zip(mnist.train_x, mnist.train_y)), batch_size=train_batch_size, shuffle=True
 )
