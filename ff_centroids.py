@@ -16,12 +16,13 @@ print("Using device:", device)
 
 
 def calculate_distance_matrix(x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
-    # TODO: review this for clarity--should be for general x1 and x2, not just h and centroids
-    x1_to_x2 = x1.unsqueeze(2) - x2  # [n_examples, n_features, n_classes_in_batch]
-    return x1_to_x2.pow(2).mean(1)  # [n_examples, n_classes_in_batch]
-    # Couldn't get the following to work, not sure why:
-    # # Unsqueeze to add a dummy dimension, then squeeze to remove it
-    # return torch.cdist(x1.unsqueeze(0), x2.unsqueeze(0)).pow(2).squeeze(0)
+    """
+    Args:
+        x1 [N, D]
+        x2 [M, D]
+    """
+    x1_to_x2 = x1.unsqueeze(2) - x2  # [N, D, M]
+    return x1_to_x2.pow(2).mean(1)  # [N, M]
 
 
 def remap_class_labels(labels):
