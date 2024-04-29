@@ -58,11 +58,8 @@ def predict(model: nn.Sequential, x, y_true, skip_layers: int = 1):
     """
     Predict by finding the class with closest centroid to each example.
 
-    TODO: If there's only one or a few examples of a class, the centroid will be
-    very close to the example itself, a data leakage issue. This can be fixed by
-    excluding the example from the centroid calculation, using the training
-    centroids, or somehow using a different method to predict. If there's no
-    examples then it won't even be considered, another data leakage issue.
+    Note, if the number of examples is small, prediction is easier. So,
+    therefore best called with many examples per class.
     """
     y_true, class_map = remap_class_labels(y_true)
     assert skip_layers >= 0 and skip_layers < len(model), "Invalid skip_layers"
@@ -78,8 +75,7 @@ def predict(model: nn.Sequential, x, y_true, skip_layers: int = 1):
 
 def centroid_loss(h, y_true, temperature=4.0, regulariser=0.1):
     """
-    Loss function based on (squared) distance to the true centroid vs other
-    centroids.
+    Loss function based on distance to the true centroid vs other centroids.
 
     Achieves an error rate of ~1.6%.
 
@@ -117,12 +113,10 @@ model = nn.Sequential(
     nn.Sequential(
         Flatten(),
         nn.Linear(784, n_units),
-        #nn.BatchNorm1d(n_units),
         nn.ReLU(),
     ),
     nn.Sequential(
         nn.Linear(n_units, n_units),
-        #nn.BatchNorm1d(n_units),
         nn.ReLU(),
     ),
 ).to(device)
